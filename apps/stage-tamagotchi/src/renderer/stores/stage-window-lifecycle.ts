@@ -5,7 +5,10 @@ import { getElectronEventaContext } from '@proj-airi/electron-vueuse'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-import { electronGetWindowLifecycleState, electronWindowLifecycleChanged } from '../../shared/eventa'
+import { electronGetWindowLifecycleState, electronWindowClose, electronWindowLifecycleChanged } from '../../shared/eventa'
+import { resolveInitialRendererRoutePath } from '../window-context'
+
+const MAIN_STAGE_IDLE_HIDE_MS = 3 * 60 * 1000
 
 export function createDefaultWindowLifecycleState(): ElectronWindowLifecycleState {
   return {
@@ -27,11 +30,41 @@ export function shouldPauseStageFromLifecycle(state: ElectronWindowLifecycleStat
 export const useStageWindowLifecycleStore = defineStore('stageWindowLifecycle', () => {
   const windowLifecycle = ref<ElectronWindowLifecycleState>(createDefaultWindowLifecycleState())
   const stagePaused = computed(() => shouldPauseStageFromLifecycle(windowLifecycle.value))
+  const isMainStageWindow = resolveInitialRendererRoutePath('/') === '/'
 
   let initialized = false
+  let idleHideTimer: ReturnType<typeof setTimeout> | undefined
+  let requestHide: (() => void) | undefined
+
+  function clearIdleHideTimer() {
+    if (!idleHideTimer)
+      return
+
+    clearTimeout(idleHideTimer)
+    idleHideTimer = undefined
+  }
+
+  function scheduleIdleHide() {
+    if (!isMainStageWindow || !requestHide)
+      return
+
+    clearIdleHideTimer()
+    idleHideTimer = setTimeout(() => {
+      idleHideTimer = undefined
+      requestHide?.()
+    }, MAIN_STAGE_IDLE_HIDE_MS)
+  }
 
   function updateWindowLifecycle(state: ElectronWindowLifecycleState) {
     windowLifecycle.value = { ...state }
+
+    if (!isMainStageWindow)
+      return
+
+    if (state.visible && !state.minimized)
+      scheduleIdleHide()
+    else
+      clearIdleHideTimer()
   }
 
   async function initializeWindowLifecycleBridge() {
@@ -41,6 +74,18 @@ export const useStageWindowLifecycleStore = defineStore('stageWindowLifecycle', 
     initialized = true
 
     const context = getElectronEventaContext()
+
+    if (isMainStageWindow) {
+      const closeWindow = defineInvoke(context, electronWindowClose)
+      requestHide = () => {
+        void closeWindow()
+      }
+
+      window.addEventListener('pointerdown', scheduleIdleHide, { passive: true })
+      window.addEventListener('keydown', scheduleIdleHide)
+      window.addEventListener('wheel', scheduleIdleHide, { passive: true })
+    }
+
     context.on(electronWindowLifecycleChanged, (event) => {
       if (!event?.body)
         return
