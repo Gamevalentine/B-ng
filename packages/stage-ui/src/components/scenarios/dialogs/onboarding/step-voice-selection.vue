@@ -25,7 +25,15 @@ const {
 } = storeToRefs(speechStore)
 
 const loading = ref(false)
-const voices = computed(() => speechStore.getVoicesForProvider(activeSpeechProvider.value))
+
+function supportsVietnamese(voice: ReturnType<typeof speechStore.getVoicesForProvider>[number]) {
+  return voice.languages?.some(language => language.code.toLowerCase().startsWith('vi')) ?? false
+}
+
+const voices = computed(() => {
+  return [...speechStore.getVoicesForProvider(activeSpeechProvider.value)]
+    .sort((a, b) => Number(supportsVietnamese(b)) - Number(supportsVietnamese(a)))
+})
 const usesManualVoice = computed(() => activeSpeechProvider.value === 'openai-compatible-audio-speech')
 const canProceed = computed(() => Boolean(activeSpeechProvider.value && activeSpeechModel.value && activeSpeechVoiceId.value))
 
@@ -80,7 +88,7 @@ onMounted(initializeVoiceStep)
         <div i-solar:alt-arrow-left-line-duotone h-5 w-5 />
       </button>
       <h2 class="flex-1 text-center text-xl text-neutral-800 font-semibold md:text-left md:text-2xl dark:text-neutral-100">
-        Choose AIRI's voice
+        Chọn giọng nói cho AIRI
       </h2>
       <div h-5 w-5 />
     </div>
@@ -89,7 +97,7 @@ onMounted(initializeVoiceStep)
       <div class="space-y-4">
         <div v-if="providerModels.length > 1" class="space-y-2">
           <div class="text-sm text-neutral-600 font-medium dark:text-neutral-300">
-            Voice model
+            Mô hình giọng nói
           </div>
           <select
             v-model="activeSpeechModel"
@@ -104,14 +112,14 @@ onMounted(initializeVoiceStep)
         <FieldInput
           v-if="usesManualVoice"
           v-model="activeSpeechVoiceId"
-          label="Voice"
-          description="Enter the voice ID supported by your OpenAI-compatible TTS service."
+          label="Giọng nói"
+          description="Nhập ID giọng nói mà dịch vụ TTS tương thích OpenAI của bạn hỗ trợ."
           placeholder="alloy"
         />
 
         <div v-else class="space-y-2">
           <div class="text-sm text-neutral-600 font-medium dark:text-neutral-300">
-            Voice
+            Giọng nói
           </div>
           <div v-if="voices.length" class="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <button
@@ -128,12 +136,12 @@ onMounted(initializeVoiceStep)
                 {{ voice.name || voice.id }}
               </div>
               <div class="mt-1 truncate text-xs text-neutral-500">
-                {{ voice.id }}
+                {{ supportsVietnamese(voice) ? 'Hỗ trợ tiếng Việt' : voice.id }}
               </div>
             </button>
           </div>
           <div v-else-if="!loading && !isLoadingSpeechProviderVoices" class="rounded-xl bg-neutral-100 p-4 text-sm text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-            No voices were returned by this provider.
+            Nhà cung cấp này không trả về danh sách giọng nói.
           </div>
         </div>
 
@@ -145,7 +153,7 @@ onMounted(initializeVoiceStep)
 
     <Button
       class="w-full flex-shrink-0"
-      label="Continue"
+      label="Tiếp tục"
       :loading="loading || isLoadingSpeechProviderVoices"
       :disabled="!canProceed"
       @click="props.onNext"
