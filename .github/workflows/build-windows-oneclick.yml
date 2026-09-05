@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/build-windows-oneclick.yml'
       - 'apps/stage-tamagotchi/**'
+      - 'packages/stage-ui/**'
       - 'engines/stage-tamagotchi-godot/**'
 
 permissions:
