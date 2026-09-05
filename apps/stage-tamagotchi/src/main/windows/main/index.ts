@@ -47,6 +47,27 @@ const appConfigSchema = object({
 
 type AppConfig = InferOutput<typeof appConfigSchema>
 
+const HUMAN_WAKE_HOUR = 7
+const HUMAN_WAKE_END_HOUR = 23
+const HUMAN_WAKE_END_MINUTE = 30
+
+function isWithinHumanHours(date: Date) {
+  const minutes = date.getHours() * 60 + date.getMinutes()
+  const startMinutes = HUMAN_WAKE_HOUR * 60
+  const endMinutes = HUMAN_WAKE_END_HOUR * 60 + HUMAN_WAKE_END_MINUTE
+  return minutes >= startMinutes && minutes < endMinutes
+}
+
+function getNextHumanWakeAt(date: Date) {
+  const nextWake = new Date(date)
+  nextWake.setHours(HUMAN_WAKE_HOUR, 0, 0, 0)
+
+  if (nextWake.getTime() <= date.getTime())
+    nextWake.setDate(nextWake.getDate() + 1)
+
+  return nextWake
+}
+
 export async function setupMainWindow(params: {
   editorWindow: EditorWindowManager
   settingsWindow: SettingsWindowManager
@@ -100,8 +121,30 @@ export async function setupMainWindow(params: {
   }
 
   let allowClose = false
+  let humanWakeTimer: ReturnType<typeof setTimeout> | undefined
+
+  function scheduleHumanWake() {
+    if (humanWakeTimer)
+      clearTimeout(humanWakeTimer)
+
+    const now = new Date()
+    const nextWake = getNextHumanWakeAt(now)
+    const delay = Math.max(0, nextWake.getTime() - now.getTime())
+
+    humanWakeTimer = setTimeout(() => {
+      humanWakeTimer = undefined
+
+      if (!window.isDestroyed() && !window.isVisible() && isWithinHumanHours(new Date()))
+        window.showInactive()
+
+      scheduleHumanWake()
+    }, delay)
+  }
+
   onAppBeforeQuit(() => {
     allowClose = true
+    if (humanWakeTimer)
+      clearTimeout(humanWakeTimer)
   })
 
   // NOTICE: in development mode, open devtools by default
@@ -168,7 +211,10 @@ export async function setupMainWindow(params: {
   }
   setWindowAlwaysOnTop(window, true)
 
-  window.on('ready-to-show', () => window!.show())
+  window.on('ready-to-show', () => {
+    window.show()
+    scheduleHumanWake()
+  })
   protectPrivilegedWindowNavigation(window)
 
   await setupMainWindowElectronInvokes({
