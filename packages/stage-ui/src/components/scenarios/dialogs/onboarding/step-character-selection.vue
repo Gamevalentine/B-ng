@@ -47,7 +47,7 @@ onMounted(async () => {
         <div i-solar:alt-arrow-left-line-duotone h-5 w-5 />
       </button>
       <h2 class="flex-1 text-center text-xl text-neutral-800 font-semibold md:text-left md:text-2xl dark:text-neutral-100">
-        Choose your character
+        Chọn nhân vật của bạn
       </h2>
       <div h-5 w-5 />
     </div>
@@ -89,7 +89,7 @@ onMounted(async () => {
 
     <Button
       class="w-full flex-shrink-0"
-      label="Start chatting"
+      label="Bắt đầu trò chuyện"
       :loading="loading"
       :disabled="!stageModelSelected"
       @click="finish"
