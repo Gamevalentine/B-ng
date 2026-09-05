@@ -13,13 +13,16 @@ import { isCustomProvidersDisabled } from '@proj-airi/stage-shared'
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, onMounted, ref } from 'vue'
 
+import StepCharacterSelection from './step-character-selection.vue'
 import StepModelSelection from './step-model-selection.vue'
 import StepProviderConfiguration from './step-provider-configuration.vue'
 import StepProviderSelection from './step-provider-selection.vue'
+import StepVoiceSelection from './step-voice-selection.vue'
 import StepWelcome from './step-welcome.vue'
 
 import { useAnalytics } from '../../../../composables/use-analytics'
 import { useConsciousnessStore } from '../../../../stores/modules/consciousness'
+import { useSpeechStore } from '../../../../stores/modules/speech'
 import { useProviderConfigStore } from '../../../../stores/providers/config'
 import { useProviderStore } from '../../../../stores/providers/provider'
 
@@ -37,19 +40,18 @@ const emit = defineEmits<Emits>()
 const step = ref(0)
 const direction = ref<'next' | 'previous'>('next')
 const pendingProviderConfig = ref<ProviderConfigData | null>(null)
+const pendingSpeechProviderConfig = ref<ProviderConfigData | null>(null)
 const { trackOnboardingCompleted, trackOnboardingStarted, trackOnboardingStepCompleted } = useAnalytics()
 
 const providersStore = useProviderStore()
-
-const providerStore = useProviderConfigStore()
-const { configs: providers } = storeToRefs(providerStore)
-const { allChatProvidersMetadata } = storeToRefs(providersStore)
+const providerConfigStore = useProviderConfigStore()
+const speechStore = useSpeechStore()
 const consciousnessStore = useConsciousnessStore()
-const {
-  activeProvider,
-} = storeToRefs(consciousnessStore)
 
-// Popular providers for first-time setup
+const { allChatProvidersMetadata, allAudioSpeechProvidersMetadata } = storeToRefs(providersStore)
+const { activeProvider } = storeToRefs(consciousnessStore)
+const { activeSpeechProvider } = storeToRefs(speechStore)
+
 const popularProviders = computed(() => {
   const popular = ['openai', 'azure-openai', 'anthropic', 'amazon-bedrock', 'google-generative-ai', 'groq', 'nvidia', 'openrouter-ai', 'ollama', 'deepseek', 'player2', 'openai-compatible']
   return allChatProvidersMetadata.value
@@ -57,12 +59,23 @@ const popularProviders = computed(() => {
     .sort((a, b) => popular.indexOf(a.id) - popular.indexOf(b.id))
 })
 
-// Selected provider and form data
-const selectedProviderId = ref('')
+const popularSpeechProviders = computed(() => {
+  const popular = ['openai-audio-speech', 'google-gemini-audio-speech', 'elevenlabs', 'openrouter-audio-speech', 'minimax-speech']
+  return allAudioSpeechProvidersMetadata.value
+    .filter(provider => popular.includes(provider.id))
+    .sort((a, b) => popular.indexOf(a.id) - popular.indexOf(b.id))
+})
 
-// Computed selected provider
+const selectedProviderId = ref('')
+const selectedSpeechProviderId = ref('')
+const speechAutoConfigured = ref(false)
+
 const selectedProvider = computed(() => {
   return allChatProvidersMetadata.value.find(p => p.id === selectedProviderId.value) || null
+})
+
+const selectedSpeechProvider = computed(() => {
+  return allAudioSpeechProvidersMetadata.value.find(p => p.id === selectedSpeechProviderId.value) || null
 })
 
 const selectedProviderType = computed<ProviderMode>(() => {
@@ -71,24 +84,17 @@ const selectedProviderType = computed<ProviderMode>(() => {
   return selectedProviderId.value.startsWith('official-provider') ? 'official' : 'custom'
 })
 
-// Reset validation state when provider changes
 function selectProvider(provider: ProviderMetadata) {
   selectedProviderId.value = provider.id
+  speechAutoConfigured.value = false
+  selectedSpeechProviderId.value = ''
 }
 
-const requestPreviousStep: OnboardingStepPrevHandler = () => {
-  return navigatePrevious()
+function selectSpeechProvider(provider: ProviderMetadata) {
+  selectedSpeechProviderId.value = provider.id
 }
 
-const requestNextStep: OnboardingStepNextHandler = async (configData?: ProviderConfigData) => {
-  pendingProviderConfig.value = configData ?? null
-  await navigateNext()
-}
-
-async function saveProviderConfiguration(data: ProviderConfigData) {
-  if (!selectedProvider.value)
-    return
-
+function toProviderConfig(data: ProviderConfigData) {
   const config: Record<string, unknown> = {}
 
   if (data.apiKey)
@@ -104,11 +110,40 @@ async function saveProviderConfiguration(data: ProviderConfigData) {
     }
   }
 
-  providers.value[selectedProvider.value.id] = {
-    ...providers.value[selectedProvider.value.id],
-    ...config,
-  }
+  return config
+}
 
+async function persistProviderConfiguration(providerId: string, config: Record<string, unknown>) {
+  providerConfigStore.ensureProvider(providerId, providerId, config)
+  await providerConfigStore.updateProviderConfig(providerId, config, 'configured')
+  providerConfigStore.markProviderAdded(providerId)
+  await providersStore.initializeProvider(providerId)
+}
+
+async function prepareSpeechFromChatProvider(providerId: string, config: Record<string, unknown>) {
+  speechAutoConfigured.value = false
+
+  // OpenAI chat and OpenAI TTS use the same API key/base URL, so fresh installs
+  // can go straight from model selection to voice selection without asking for
+  // the same credentials twice.
+  if (providerId !== 'openai')
+    return
+
+  const speechProviderId = 'openai-audio-speech'
+  await persistProviderConfiguration(speechProviderId, config)
+
+  selectedSpeechProviderId.value = speechProviderId
+  activeSpeechProvider.value = speechProviderId
+  await providersStore.fetchModelsForProvider(speechProviderId)
+  speechAutoConfigured.value = true
+}
+
+async function saveProviderConfiguration(data: ProviderConfigData) {
+  if (!selectedProvider.value)
+    return
+
+  const config = toProviderConfig(data)
+  await persistProviderConfiguration(selectedProvider.value.id, config)
   activeProvider.value = selectedProvider.value.id
 
   await nextTick()
@@ -119,6 +154,39 @@ async function saveProviderConfiguration(data: ProviderConfigData) {
   catch (err) {
     console.error('[onboarding] Failed to load models for provider:', err)
   }
+
+  try {
+    await prepareSpeechFromChatProvider(selectedProvider.value.id, config)
+  }
+  catch (err) {
+    console.error('[onboarding] Failed to prepare speech provider:', err)
+    speechAutoConfigured.value = false
+  }
+}
+
+async function saveSpeechProviderConfiguration(data: ProviderConfigData) {
+  if (!selectedSpeechProvider.value)
+    return
+
+  const config = toProviderConfig(data)
+  await persistProviderConfiguration(selectedSpeechProvider.value.id, config)
+
+  activeSpeechProvider.value = selectedSpeechProvider.value.id
+  await nextTick()
+  await providersStore.fetchModelsForProvider(selectedSpeechProvider.value.id)
+}
+
+const requestPreviousStep: OnboardingStepPrevHandler = () => navigatePrevious()
+
+const requestNextStep: OnboardingStepNextHandler = async (configData?: ProviderConfigData) => {
+  if (configData) {
+    if (currentStep.value?.id === 'speech-provider-configuration')
+      pendingSpeechProviderConfig.value = configData
+    else
+      pendingProviderConfig.value = configData
+  }
+
+  await navigateNext()
 }
 
 const allSteps = computed<OnboardingStep[]>(() => {
@@ -155,10 +223,10 @@ const allSteps = computed<OnboardingStep[]>(() => {
         return true
       },
     },
-    ...props.extraSteps.map(step => ({
-      ...step,
+    ...props.extraSteps.map(extraStep => ({
+      ...extraStep,
       props: () => ({
-        ...step.props?.(),
+        ...extraStep.props?.(),
       }),
     })),
     {
@@ -166,6 +234,47 @@ const allSteps = computed<OnboardingStep[]>(() => {
       component: StepModelSelection,
     },
   ]
+
+  if (!speechAutoConfigured.value) {
+    coreSteps.push(
+      {
+        id: 'speech-provider-selection',
+        component: StepProviderSelection,
+        props: () => ({
+          selectedProviderId: selectedSpeechProviderId.value,
+          popularProviders: popularSpeechProviders.value,
+          onSelectProvider: selectSpeechProvider,
+        }),
+      },
+      {
+        id: 'speech-provider-configuration',
+        component: StepProviderConfiguration,
+        props: () => ({
+          selectedProviderId: selectedSpeechProviderId.value,
+          selectedProvider: selectedSpeechProvider.value,
+        }),
+        beforeNext: async () => {
+          if (!pendingSpeechProviderConfig.value)
+            return false
+
+          await saveSpeechProviderConfiguration(pendingSpeechProviderConfig.value)
+          pendingSpeechProviderConfig.value = null
+          return true
+        },
+      },
+    )
+  }
+
+  coreSteps.push(
+    {
+      id: 'voice-selection',
+      component: StepVoiceSelection,
+    },
+    {
+      id: 'character-selection',
+      component: StepCharacterSelection,
+    },
+  )
 
   return coreSteps
 })
