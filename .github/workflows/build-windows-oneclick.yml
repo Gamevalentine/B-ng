@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/build-windows-oneclick.yml'
+      - 'apps/stage-tamagotchi/**'
+      - 'engines/stage-tamagotchi-godot/**'
 
 permissions:
   contents: write
