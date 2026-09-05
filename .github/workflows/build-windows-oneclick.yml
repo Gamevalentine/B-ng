@@ -83,13 +83,18 @@ jobs:
           $installer = Get-ChildItem apps/stage-tamagotchi/dist -Filter '*windows-x64-setup.exe' -File | Select-Object -First 1
           if (-not $installer) { throw 'Windows installer not found' }
 
+          $asset = Join-Path $PWD 'AIRI-Windows-x64-Setup.exe'
+          Copy-Item $installer.FullName $asset -Force
+
           gh release view airi-custom-latest *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release delete airi-custom-latest --cleanup-tag -y
-            if ($LASTEXITCODE -ne 0) { throw 'Failed to replace previous AIRI release' }
+            gh release upload airi-custom-latest $asset --clobber
+          }
+          else {
+            gh release create airi-custom-latest $asset `
+              --title 'AIRI Custom Windows x64' `
+              --notes 'One-click Windows x64 build from Gamevalentine/B-ng. Built automatically by GitHub Actions.'
           }
 
-          gh release create airi-custom-latest $installer.FullName `
-            --title 'AIRI Custom Windows x64' `
-            --notes 'One-click Windows x64 build from Gamevalentine/B-ng. Built automatically by GitHub Actions.'
           if ($LASTEXITCODE -ne 0) { throw 'Failed to publish AIRI Windows release' }
+          Write-Host "Direct download: https://github.com/$env:GITHUB_REPOSITORY/releases/download/airi-custom-latest/AIRI-Windows-x64-Setup.exe"
