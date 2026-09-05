@@ -3,21 +3,40 @@ import { useElectronEventaInvoke } from '@proj-airi/electron-vueuse'
 import { OnboardingScreen, OnboardingStepAnalyticsNotice } from '@proj-airi/stage-ui/components'
 import { isAnalyticsAvailableInBuild } from '@proj-airi/stage-ui/libs/product-signals'
 import { useAuthStore } from '@proj-airi/stage-ui/stores/auth'
+import { useHearingStore } from '@proj-airi/stage-ui/stores/modules/hearing'
 import { useOnboardingStore } from '@proj-airi/stage-ui/stores/onboarding'
+import { useProviderConfigStore } from '@proj-airi/stage-ui/stores/providers/config'
 import { useTheme } from '@proj-airi/ui'
 import { storeToRefs } from 'pinia'
-import { computed, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 
 import { electronAuthStartLogin, electronOnboardingClose } from '../../shared/eventa'
+
+const VIETNAMESE_HEARING_PROVIDER = 'browser-web-speech-api'
+const VIETNAMESE_LOCALE = 'vi-VN'
 
 const authStore = useAuthStore()
 const { needsLogin, isAuthenticated } = storeToRefs(authStore)
 const onboardingStore = useOnboardingStore()
 const { closeRequestId } = storeToRefs(onboardingStore)
+const hearingStore = useHearingStore()
+const { activeTranscriptionProvider } = storeToRefs(hearingStore)
+const providerConfigStore = useProviderConfigStore()
 const { isDark } = useTheme()
 const startLogin = useElectronEventaInvoke(electronAuthStartLogin)
 const closeWindow = useElectronEventaInvoke(electronOnboardingClose)
 let closing = false
+
+async function configureVietnameseHearingIfEmpty() {
+  if (activeTranscriptionProvider.value)
+    return
+
+  const config = { language: VIETNAMESE_LOCALE }
+  providerConfigStore.ensureProvider(VIETNAMESE_HEARING_PROVIDER, VIETNAMESE_HEARING_PROVIDER, config)
+  await providerConfigStore.updateProviderConfig(VIETNAMESE_HEARING_PROVIDER, config, 'configured')
+  providerConfigStore.markProviderAdded(VIETNAMESE_HEARING_PROVIDER)
+  activeTranscriptionProvider.value = VIETNAMESE_HEARING_PROVIDER
+}
 
 async function closeOnboardingWindow() {
   if (closing)
@@ -51,6 +70,12 @@ watch(needsLogin, async (val) => {
     needsLogin.value = false
     await closeOnboardingWindow()
   }
+})
+
+onMounted(() => {
+  void configureVietnameseHearingIfEmpty().catch((error) => {
+    console.error('[Onboarding] Failed to configure Vietnamese hearing defaults.', error)
+  })
 })
 
 const bgClass = computed(() => isDark.value ? 'bg-[#0f0f0f]' : 'bg-white')
