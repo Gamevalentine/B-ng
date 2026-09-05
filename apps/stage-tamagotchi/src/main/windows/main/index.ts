@@ -21,7 +21,7 @@ import { defineInvokeHandler } from '@moeru/eventa'
 import { createContext } from '@moeru/eventa/adapters/electron/main'
 import { initScreenCaptureForWindow } from '@proj-airi/electron-screen-capture/main'
 import { defu } from 'defu'
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow, ipcMain, powerMonitor } from 'electron'
 import { isLinux, isMacOS } from 'std-env'
 import { array, number, object, optional, string } from 'valibot'
 
@@ -50,6 +50,8 @@ type AppConfig = InferOutput<typeof appConfigSchema>
 const HUMAN_WAKE_HOUR = 7
 const HUMAN_WAKE_END_HOUR = 23
 const HUMAN_WAKE_END_MINUTE = 30
+const HUMAN_WAKE_RETRY_MS = 60 * 1000
+const USER_ACTIVE_IDLE_SECONDS = 5 * 60
 
 function isWithinHumanHours(date: Date) {
   const minutes = date.getHours() * 60 + date.getMinutes()
@@ -66,6 +68,10 @@ function getNextHumanWakeAt(date: Date) {
     nextWake.setDate(nextWake.getDate() + 1)
 
   return nextWake
+}
+
+function isUserActive() {
+  return powerMonitor.getSystemIdleTime() < USER_ACTIVE_IDLE_SECONDS
 }
 
 export async function setupMainWindow(params: {
@@ -123,19 +129,34 @@ export async function setupMainWindow(params: {
   let allowClose = false
   let humanWakeTimer: ReturnType<typeof setTimeout> | undefined
 
-  function scheduleHumanWake() {
+  function scheduleHumanWake(delayOverride?: number) {
     if (humanWakeTimer)
       clearTimeout(humanWakeTimer)
 
     const now = new Date()
     const nextWake = getNextHumanWakeAt(now)
-    const delay = Math.max(0, nextWake.getTime() - now.getTime())
+    const delay = delayOverride ?? Math.max(0, nextWake.getTime() - now.getTime())
 
     humanWakeTimer = setTimeout(() => {
       humanWakeTimer = undefined
 
-      if (!window.isDestroyed() && !window.isVisible() && isWithinHumanHours(new Date()))
+      const wakeTime = new Date()
+      if (window.isDestroyed())
+        return
+
+      if (!isWithinHumanHours(wakeTime)) {
+        scheduleHumanWake()
+        return
+      }
+
+      if (!window.isVisible()) {
+        if (!isUserActive()) {
+          scheduleHumanWake(HUMAN_WAKE_RETRY_MS)
+          return
+        }
+
         window.showInactive()
+      }
 
       scheduleHumanWake()
     }, delay)
