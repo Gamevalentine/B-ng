@@ -176,19 +176,6 @@ async function saveSpeechProviderConfiguration(data: ProviderConfigData) {
   await providersStore.fetchModelsForProvider(selectedSpeechProvider.value.id)
 }
 
-const requestPreviousStep: OnboardingStepPrevHandler = () => navigatePrevious()
-
-const requestNextStep: OnboardingStepNextHandler = async (configData?: ProviderConfigData) => {
-  if (configData) {
-    if (currentStep.value?.id === 'speech-provider-configuration')
-      pendingSpeechProviderConfig.value = configData
-    else
-      pendingProviderConfig.value = configData
-  }
-
-  await navigateNext()
-}
-
 const allSteps = computed<OnboardingStep[]>(() => {
   const coreSteps: OnboardingStep[] = [
     {
@@ -282,6 +269,19 @@ const allSteps = computed<OnboardingStep[]>(() => {
 const currentStep = computed(() => allSteps.value[step.value] ?? null)
 const isLastStep = computed(() => step.value === allSteps.value.length - 1)
 const currentStepProps = computed(() => currentStep.value?.props?.() ?? {})
+
+const requestPreviousStep: OnboardingStepPrevHandler = () => navigatePrevious()
+
+const requestNextStep: OnboardingStepNextHandler = async (configData?: ProviderConfigData) => {
+  if (configData) {
+    if (currentStep.value?.id === 'speech-provider-configuration')
+      pendingSpeechProviderConfig.value = configData
+    else
+      pendingProviderConfig.value = configData
+  }
+
+  await navigateNext()
+}
 
 async function handleSave() {
   trackOnboardingStepCompleted(currentStep.value?.id ?? 'unknown')
