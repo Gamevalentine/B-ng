@@ -8,7 +8,7 @@ on:
       - '.github/workflows/build-windows-oneclick.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-windows:
@@ -71,3 +71,22 @@ jobs:
           path: apps/stage-tamagotchi/dist/*windows-x64-setup.exe
           if-no-files-found: error
           retention-days: 7
+
+      - name: Publish direct-download release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $installer = Get-ChildItem apps/stage-tamagotchi/dist -Filter '*windows-x64-setup.exe' -File | Select-Object -First 1
+          if (-not $installer) { throw 'Windows installer not found' }
+
+          gh release view airi-custom-latest *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release delete airi-custom-latest --cleanup-tag -y
+            if ($LASTEXITCODE -ne 0) { throw 'Failed to replace previous AIRI release' }
+          }
+
+          gh release create airi-custom-latest $installer.FullName `
+            --title 'AIRI Custom Windows x64' `
+            --notes 'One-click Windows x64 build from Gamevalentine/B-ng. Built automatically by GitHub Actions.'
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to publish AIRI Windows release' }
