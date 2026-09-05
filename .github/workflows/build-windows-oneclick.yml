@@ -1,0 +1,73 @@
+name: Build AIRI Windows One-Click
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-windows-oneclick.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      VITE_ENABLE_POSTHOG: 'false'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm + Node
+        uses: pnpm/setup@v2
+        with:
+          runtime: node@26.7.0
+          cache: true
+          install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace packages
+        run: pnpm run build:packages
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: '4.7.1'
+          use-dotnet: true
+          include-templates: true
+
+      - name: Export Godot stage
+        working-directory: ./engines/stage-tamagotchi-godot
+        shell: bash
+        run: |
+          mkdir -p out/win
+          godot --headless --export-release "Windows Desktop" out/win/godot-stage.exe
+
+      - name: Build AIRI Windows x64 installer
+        shell: pwsh
+        run: |
+          pnpm run -F @proj-airi/stage-tamagotchi build
+          pnpm -F @proj-airi/stage-tamagotchi exec electron-builder build --windows --x64 --publish=never
+
+      - name: Show produced files
+        shell: pwsh
+        run: Get-ChildItem apps/stage-tamagotchi/dist -Recurse | Select-Object FullName,Length
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIRI-Windows-x64-Setup
+          path: apps/stage-tamagotchi/dist/*windows-x64-setup.exe
+          if-no-files-found: error
+          retention-days: 7
