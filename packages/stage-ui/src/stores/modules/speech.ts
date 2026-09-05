@@ -111,6 +111,24 @@ export const useSpeechStore = defineStore('speech', () => {
     return ['elevenlabs', 'microsoft-speech', 'azure-speech'].includes(activeSpeechProvider.value)
   })
 
+  function preferVietnameseOfficialVoice(provider: string, voices: VoiceInfo[]) {
+    const isOfficialProvider = provider === OFFICIAL_SPEECH_PROVIDER_ID || provider === OFFICIAL_SPEECH_STREAMING_PROVIDER_ID
+    if (!isOfficialProvider || !locale.value.toLowerCase().startsWith('vi'))
+      return
+
+    const speaksVietnamese = (voice: VoiceInfo) => voice.languages.some(language => language.code.toLowerCase().split(/[-_]/)[0] === 'vi')
+    const selectedVoice = voices.find(voice => voice.id === activeSpeechVoiceId.value)
+    const vietnameseVoice = selectedVoice && speaksVietnamese(selectedVoice)
+      ? selectedVoice
+      : voices.find(speaksVietnamese)
+
+    if (!vietnameseVoice)
+      return
+
+    activeSpeechVoiceId.value = vietnameseVoice.id
+    activeSpeechVoice.value = vietnameseVoice
+  }
+
   async function loadVoicesForProvider(provider: string, model?: string) {
     if (!provider) {
       return []
@@ -133,6 +151,7 @@ export const useSpeechStore = defineStore('speech', () => {
         ...availableVoices.value,
         [provider]: voices,
       }
+      preferVietnameseOfficialVoice(provider, voices)
       return voices
     }
     catch (error) {
@@ -246,6 +265,10 @@ export const useSpeechStore = defineStore('speech', () => {
     activeSpeechVoiceId,
     availableVoices,
     uiLocale: locale,
+  })
+
+  watch(locale, () => {
+    preferVietnameseOfficialVoice(activeSpeechProvider.value, getVoicesForProvider(activeSpeechProvider.value))
   })
 
   watch([activeSpeechVoiceId, availableVoices], ([voiceId, voices]) => {

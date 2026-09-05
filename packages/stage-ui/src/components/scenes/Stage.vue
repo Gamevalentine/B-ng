@@ -832,6 +832,18 @@ function openTtsSession(turnId: string): StageTtsSession {
   return session
 }
 
+async function ensureStreamingSpeechReady() {
+  if (resolveSpeechTransport(activeSpeechProvider.value) !== 'bidirectional-ws')
+    return
+
+  if (activeSpeechVoice.value?.id && resolveStreamingSessionModel())
+    return
+
+  speechStore.ensureActiveSpeechModel()
+  await speechStore.loadVoicesForProvider(activeSpeechProvider.value, activeSpeechModel.value || undefined)
+  await nextTick()
+}
+
 watch(latestStopRequest, (request) => {
   if (!request)
     return
@@ -854,6 +866,7 @@ chatHookCleanups.push(onBeforeMessageComposed(async (_message, context) => {
   if (speechMuted.value)
     return
 
+  await ensureStreamingSpeechReady()
   setupAnalyser()
   await setupLipSync()
   currentSession = openTtsSession(context.turnId)
