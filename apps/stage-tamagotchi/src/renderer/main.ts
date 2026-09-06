@@ -5,6 +5,7 @@ import Tres from '@tresjs/core'
 
 import { autoAnimatePlugin } from '@formkit/auto-animate/vue'
 import { PiniaColada } from '@pinia/colada'
+import { getElectronEventaContext } from '@proj-airi/electron-vueuse'
 import { trackButtonPlugin } from '@proj-airi/stage-ui/directives/track-button'
 import { browserAuthorizationHandler, registerAuthorizationHandler } from '@proj-airi/stage-ui/libs/auth'
 import { piniaPluginTracing, setupSynced } from '@proj-airi/stage-ui/libs/pinia'
@@ -18,8 +19,9 @@ import { handleHotUpdate, routes } from 'vue-router/auto-routes'
 
 import App from './App.vue'
 
+import { electronStageProactiveCheckIn } from '../shared/eventa/auto-presence'
 import { i18n } from './modules/i18n'
-import { resolveRendererWindowContext } from './window-context'
+import { resolveInitialRendererRoutePath, resolveRendererWindowContext } from './window-context'
 
 import '@unocss/reset/tailwind.css'
 import 'splitpanes/dist/splitpanes.css'
@@ -46,6 +48,62 @@ configureAnalyticsAdapter(async (options) => {
   return createPosthogAdapter(options)
 })
 registerAuthorizationHandler(browserAuthorizationHandler)
+
+function initializeProactiveCheckInBubble() {
+  if (resolveInitialRendererRoutePath('/') !== '/')
+    return
+
+  const context = getElectronEventaContext()
+  let bubble: HTMLDivElement | undefined
+  let dismissTimer: ReturnType<typeof setTimeout> | undefined
+
+  function removeBubble() {
+    if (dismissTimer) {
+      clearTimeout(dismissTimer)
+      dismissTimer = undefined
+    }
+
+    if (!bubble)
+      return
+
+    bubble.remove()
+    bubble = undefined
+  }
+
+  context.on(electronStageProactiveCheckIn, (event) => {
+    const text = event?.body?.text?.trim()
+    if (!text)
+      return
+
+    removeBubble()
+
+    bubble = document.createElement('div')
+    bubble.textContent = text
+    Object.assign(bubble.style, {
+      position: 'fixed',
+      top: '18px',
+      left: '50%',
+      zIndex: '2147483647',
+      maxWidth: '82%',
+      padding: '10px 14px',
+      border: '1px solid rgba(255, 255, 255, 0.75)',
+      borderRadius: '16px',
+      background: 'rgba(255, 255, 255, 0.94)',
+      boxShadow: '0 8px 28px rgba(0, 0, 0, 0.18)',
+      color: '#202124',
+      fontFamily: 'inherit',
+      fontSize: '14px',
+      lineHeight: '1.4',
+      textAlign: 'center',
+      transform: 'translateX(-50%)',
+      pointerEvents: 'none',
+      userSelect: 'none',
+    })
+    document.body.appendChild(bubble)
+
+    dismissTimer = setTimeout(removeBubble, 30 * 1000)
+  })
+}
 
 const pinia = createPinia()
 const synced = setupSynced({
@@ -81,3 +139,5 @@ createApp(App)
   .use(Tres)
   .use(trackButtonPlugin)
   .mount('#app')
+
+initializeProactiveCheckInBubble()
