@@ -28,6 +28,7 @@ import { array, number, object, optional, string } from 'valibot'
 import icon from '../../../../resources/icon.png?asset'
 
 import { electronStartDraggingWindow } from '../../../shared/eventa'
+import { electronStageProactiveCheckIn } from '../../../shared/eventa/auto-presence'
 import { onAppBeforeQuit } from '../../libs/bootkit/lifecycle'
 import { baseUrl, getElectronMainDirname, load, withHashRoute } from '../../libs/electron/location'
 import { createConfig } from '../../libs/electron/persistence'
@@ -52,6 +53,15 @@ const HUMAN_WAKE_END_HOUR = 23
 const HUMAN_WAKE_END_MINUTE = 30
 const HUMAN_WAKE_RETRY_MS = 60 * 1000
 const USER_ACTIVE_IDLE_SECONDS = 5 * 60
+const PROACTIVE_WAKE_MIN_MS = 45 * 60 * 1000
+const PROACTIVE_WAKE_MAX_MS = 120 * 60 * 1000
+const PROACTIVE_DISMISS_MIN_MS = 20 * 1000
+const PROACTIVE_DISMISS_MAX_MS = 30 * 1000
+const PROACTIVE_MESSAGES = [
+  'Anh vẫn đang làm việc à?',
+  'Nghỉ một chút chưa?',
+  'Em ghé qua xem anh còn ở đây không nè.',
+]
 
 function isWithinHumanHours(date: Date) {
   const minutes = date.getHours() * 60 + date.getMinutes()
@@ -72,6 +82,10 @@ function getNextHumanWakeAt(date: Date) {
 
 function isUserActive() {
   return powerMonitor.getSystemIdleTime() < USER_ACTIVE_IDLE_SECONDS
+}
+
+function randomDelay(min: number, max: number) {
+  return Math.floor(min + Math.random() * (max - min + 1))
 }
 
 export async function setupMainWindow(params: {
@@ -126,8 +140,20 @@ export async function setupMainWindow(params: {
     params.onWindowCreated(window)
   }
 
+  const { context: stageEventaContext } = createContext(ipcMain, window)
+
   let allowClose = false
   let humanWakeTimer: ReturnType<typeof setTimeout> | undefined
+  let proactiveWakeTimer: ReturnType<typeof setTimeout> | undefined
+  let proactiveDismissTimer: ReturnType<typeof setTimeout> | undefined
+
+  function clearProactiveDismissTimer() {
+    if (!proactiveDismissTimer)
+      return
+
+    clearTimeout(proactiveDismissTimer)
+    proactiveDismissTimer = undefined
+  }
 
   function scheduleHumanWake(delayOverride?: number) {
     if (humanWakeTimer)
@@ -162,10 +188,56 @@ export async function setupMainWindow(params: {
     }, delay)
   }
 
+  function scheduleProactiveWake(delayOverride?: number) {
+    if (proactiveWakeTimer)
+      clearTimeout(proactiveWakeTimer)
+
+    const delay = delayOverride ?? randomDelay(PROACTIVE_WAKE_MIN_MS, PROACTIVE_WAKE_MAX_MS)
+    proactiveWakeTimer = setTimeout(() => {
+      proactiveWakeTimer = undefined
+
+      const wakeTime = new Date()
+      if (window.isDestroyed())
+        return
+
+      if (!isWithinHumanHours(wakeTime)) {
+        const nextWake = getNextHumanWakeAt(wakeTime)
+        scheduleProactiveWake(Math.max(HUMAN_WAKE_RETRY_MS, nextWake.getTime() - wakeTime.getTime()))
+        return
+      }
+
+      if (!isUserActive()) {
+        scheduleProactiveWake(HUMAN_WAKE_RETRY_MS)
+        return
+      }
+
+      if (window.isVisible()) {
+        scheduleProactiveWake()
+        return
+      }
+
+      const text = PROACTIVE_MESSAGES[Math.floor(Math.random() * PROACTIVE_MESSAGES.length)] ?? PROACTIVE_MESSAGES[0]
+      window.showInactive()
+      stageEventaContext.emit(electronStageProactiveCheckIn, { text })
+
+      clearProactiveDismissTimer()
+      proactiveDismissTimer = setTimeout(() => {
+        proactiveDismissTimer = undefined
+        if (!window.isDestroyed() && window.isVisible() && !window.isFocused())
+          window.hide()
+      }, randomDelay(PROACTIVE_DISMISS_MIN_MS, PROACTIVE_DISMISS_MAX_MS))
+
+      scheduleProactiveWake()
+    }, delay)
+  }
+
   onAppBeforeQuit(() => {
     allowClose = true
     if (humanWakeTimer)
       clearTimeout(humanWakeTimer)
+    if (proactiveWakeTimer)
+      clearTimeout(proactiveWakeTimer)
+    clearProactiveDismissTimer()
   })
 
   // NOTICE: in development mode, open devtools by default
@@ -212,11 +284,13 @@ export async function setupMainWindow(params: {
 
   window.on('resize', () => handleNewBounds(window.getBounds()))
   window.on('move', () => handleNewBounds(window.getBounds()))
+  window.on('focus', clearProactiveDismissTimer)
   window.on('close', (event) => {
     if (allowClose) {
       return
     }
 
+    clearProactiveDismissTimer()
     event.preventDefault()
     window.hide()
   })
@@ -235,6 +309,7 @@ export async function setupMainWindow(params: {
   window.on('ready-to-show', () => {
     window.show()
     scheduleHumanWake()
+    scheduleProactiveWake()
   })
   protectPrivilegedWindowNavigation(window)
 
@@ -282,8 +357,7 @@ export async function setupMainWindow(params: {
     // manage events within eventa's context system.
     ipcMain.setMaxListeners(0)
 
-    const { context } = createContext(ipcMain, window)
-    const cleanUpWindowDraggingInvokeHandler = defineInvokeHandler(context, electronStartDraggingWindow, handleStartDraggingWindow)
+    const cleanUpWindowDraggingInvokeHandler = defineInvokeHandler(stageEventaContext, electronStartDraggingWindow, handleStartDraggingWindow)
 
     window.on('closed', () => {
       cleanUpWindowDraggingInvokeHandler()
