@@ -146,6 +146,8 @@ export async function setupMainWindow(params: {
   let humanWakeTimer: ReturnType<typeof setTimeout> | undefined
   let proactiveWakeTimer: ReturnType<typeof setTimeout> | undefined
   let proactiveDismissTimer: ReturnType<typeof setTimeout> | undefined
+  let proactiveActiveSince: number | undefined
+  let proactiveWakeAfterMs = randomDelay(PROACTIVE_WAKE_MIN_MS, PROACTIVE_WAKE_MAX_MS)
 
   function clearProactiveDismissTimer() {
     if (!proactiveDismissTimer)
@@ -153,6 +155,17 @@ export async function setupMainWindow(params: {
 
     clearTimeout(proactiveDismissTimer)
     proactiveDismissTimer = undefined
+  }
+
+  function resetProactiveActivity() {
+    proactiveActiveSince = undefined
+    proactiveWakeAfterMs = randomDelay(PROACTIVE_WAKE_MIN_MS, PROACTIVE_WAKE_MAX_MS)
+  }
+
+  function getNextProactiveActivityCheckDelay() {
+    const idleMs = powerMonitor.getSystemIdleTime() * 1000
+    const remainingActiveMs = USER_ACTIVE_IDLE_SECONDS * 1000 - idleMs
+    return Math.max(1000, Math.min(HUMAN_WAKE_RETRY_MS, remainingActiveMs))
   }
 
   function scheduleHumanWake(delayOverride?: number) {
@@ -188,31 +201,46 @@ export async function setupMainWindow(params: {
     }, delay)
   }
 
-  function scheduleProactiveWake(delayOverride?: number) {
+  function scheduleProactiveWake(delayOverride = 0) {
     if (proactiveWakeTimer)
       clearTimeout(proactiveWakeTimer)
 
-    const delay = delayOverride ?? randomDelay(PROACTIVE_WAKE_MIN_MS, PROACTIVE_WAKE_MAX_MS)
     proactiveWakeTimer = setTimeout(() => {
       proactiveWakeTimer = undefined
 
       const wakeTime = new Date()
+      const now = wakeTime.getTime()
       if (window.isDestroyed())
         return
 
       if (!isWithinHumanHours(wakeTime)) {
+        resetProactiveActivity()
         const nextWake = getNextHumanWakeAt(wakeTime)
-        scheduleProactiveWake(Math.max(HUMAN_WAKE_RETRY_MS, nextWake.getTime() - wakeTime.getTime()))
+        scheduleProactiveWake(Math.max(HUMAN_WAKE_RETRY_MS, nextWake.getTime() - now))
         return
       }
 
       if (!isUserActive()) {
+        resetProactiveActivity()
         scheduleProactiveWake(HUMAN_WAKE_RETRY_MS)
         return
       }
 
+      if (proactiveActiveSince === undefined) {
+        proactiveActiveSince = now
+        proactiveWakeAfterMs = randomDelay(PROACTIVE_WAKE_MIN_MS, PROACTIVE_WAKE_MAX_MS)
+        scheduleProactiveWake(getNextProactiveActivityCheckDelay())
+        return
+      }
+
+      if (now - proactiveActiveSince < proactiveWakeAfterMs) {
+        scheduleProactiveWake(getNextProactiveActivityCheckDelay())
+        return
+      }
+
       if (window.isVisible()) {
-        scheduleProactiveWake()
+        resetProactiveActivity()
+        scheduleProactiveWake(getNextProactiveActivityCheckDelay())
         return
       }
 
@@ -227,9 +255,17 @@ export async function setupMainWindow(params: {
           window.hide()
       }, randomDelay(PROACTIVE_DISMISS_MIN_MS, PROACTIVE_DISMISS_MAX_MS))
 
-      scheduleProactiveWake()
-    }, delay)
+      resetProactiveActivity()
+      scheduleProactiveWake(getNextProactiveActivityCheckDelay())
+    }, delayOverride)
   }
+
+  function handleProactiveActivityBreak() {
+    resetProactiveActivity()
+  }
+
+  powerMonitor.on('suspend', handleProactiveActivityBreak)
+  powerMonitor.on('lock-screen', handleProactiveActivityBreak)
 
   onAppBeforeQuit(() => {
     allowClose = true
@@ -238,6 +274,8 @@ export async function setupMainWindow(params: {
     if (proactiveWakeTimer)
       clearTimeout(proactiveWakeTimer)
     clearProactiveDismissTimer()
+    powerMonitor.removeListener('suspend', handleProactiveActivityBreak)
+    powerMonitor.removeListener('lock-screen', handleProactiveActivityBreak)
   })
 
   // NOTICE: in development mode, open devtools by default
