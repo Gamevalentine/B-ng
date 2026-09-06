@@ -28,6 +28,7 @@ import {
   electronStartDraggingWindow,
   electronWindowSetAlwaysOnTop,
 } from '../../../../shared/eventa'
+import { electronStageProactiveCheckIn } from '../../../../shared/eventa/auto-presence'
 import { useControlsIslandPlacement } from './use-controls-island-placement'
 
 interface Emits {
@@ -52,9 +53,16 @@ const isLinux = useElectronEventaInvoke(electron.app.isLinux)
 const quitApp = useElectronEventaInvoke(electronAppQuit)
 const setAlwaysOnTop = useElectronEventaInvoke(electronWindowSetAlwaysOnTop)
 const centerMainWindow = useElectronEventaInvoke(electronCenterMainWindow)
+const getWindowBounds = useElectronEventaInvoke(electron.window.getBounds)
+const setWindowBounds = useElectronEventaInvoke(electron.window.setBounds)
 
 const expanded = ref(false)
 const islandElement = useTemplateRef<HTMLElement>('island')
+const drawerWindowAdjustmentActive = ref(false)
+const drawerReserveWidth = 272
+let drawerReservedWidth = 0
+let drawerExpandedOnLeft = false
+let drawerReleaseTimer: ReturnType<typeof setTimeout> | undefined
 
 // Tracks open overlays/dialogs that should prevent auto-collapse (e.g. 'hearing', 'profile-picker')
 const blockingOverlays = reactive(new Set<string>())
@@ -67,6 +75,64 @@ function setOverlay(key: string, active: boolean) {
   }
 
   blockingOverlays.delete(key)
+}
+
+async function syncDrawerWindowSpace(open: boolean) {
+  if (open) {
+    if (drawerReservedWidth > 0)
+      return
+
+    if (drawerReleaseTimer) {
+      clearTimeout(drawerReleaseTimer)
+      drawerReleaseTimer = undefined
+    }
+
+    drawerWindowAdjustmentActive.value = true
+
+    try {
+      const bounds = await getWindowBounds()
+      drawerExpandedOnLeft = isLeft.value
+      drawerReservedWidth = drawerReserveWidth
+
+      await setWindowBounds([{
+        ...bounds,
+        x: drawerExpandedOnLeft ? bounds.x : bounds.x - drawerReservedWidth,
+        width: bounds.width + drawerReservedWidth,
+      }, false])
+    }
+    catch {
+      drawerReservedWidth = 0
+      drawerWindowAdjustmentActive.value = false
+    }
+
+    return
+  }
+
+  if (drawerReservedWidth <= 0) {
+    drawerWindowAdjustmentActive.value = false
+    return
+  }
+
+  const reservedWidth = drawerReservedWidth
+  drawerReservedWidth = 0
+
+  try {
+    const bounds = await getWindowBounds()
+    await setWindowBounds([{
+      ...bounds,
+      x: drawerExpandedOnLeft ? bounds.x : bounds.x + reservedWidth,
+      width: Math.max(320, bounds.width - reservedWidth),
+    }, false])
+  }
+  finally {
+    if (drawerReleaseTimer)
+      clearTimeout(drawerReleaseTimer)
+
+    drawerReleaseTimer = setTimeout(() => {
+      drawerWindowAdjustmentActive.value = false
+      drawerReleaseTimer = undefined
+    }, 1100)
+  }
 }
 
 // The stage page observes this element for cursor hit testing.
@@ -89,11 +155,18 @@ watch(expanded, (isExpanded) => {
   if (!isExpanded) {
     blockingOverlays.clear()
   }
+
+  void syncDrawerWindowSpace(isExpanded)
 })
 
-watch([expanded, isBlocked], ([isExpanded, isInteractionBlocked]) => {
-  emit('interactionChange', isExpanded || isInteractionBlocked)
+watch([expanded, isBlocked, drawerWindowAdjustmentActive], ([isExpanded, isInteractionBlocked, isAdjustingWindow]) => {
+  emit('interactionChange', isExpanded || isInteractionBlocked || isAdjustingWindow)
 }, { immediate: true })
+
+context.value.on(electronStageProactiveCheckIn, () => {
+  if (expanded.value)
+    expanded.value = false
+})
 
 useIntervalFn(() => {
   if (expanded.value && isOutside.value && !isBlocked.value) {
@@ -224,7 +297,7 @@ function resetMainWindowPosition() {
         <div
           v-if="expanded"
           :class="[
-            'flex flex-col gap-1 rounded-2xl border border-neutral-200 p-2 dark:border-neutral-800',
+            'w-64 flex flex-col gap-1 rounded-2xl border border-neutral-200 p-2 dark:border-neutral-800',
             'bg-neutral-100/80 shadow-2xl shadow-black/20 backdrop-blur-xl dark:bg-neutral-900/80',
             panelPositionClasses,
           ]"
