@@ -5,7 +5,7 @@ import Tres from '@tresjs/core'
 
 import { autoAnimatePlugin } from '@formkit/auto-animate/vue'
 import { PiniaColada } from '@pinia/colada'
-import { getElectronEventaContext } from '@proj-airi/electron-vueuse'
+import { getElectronEventaContext, useElectronEventaInvoke } from '@proj-airi/electron-vueuse'
 import { trackButtonPlugin } from '@proj-airi/stage-ui/directives/track-button'
 import { browserAuthorizationHandler, registerAuthorizationHandler } from '@proj-airi/stage-ui/libs/auth'
 import { piniaPluginTracing, setupSynced } from '@proj-airi/stage-ui/libs/pinia'
@@ -19,7 +19,12 @@ import { handleHotUpdate, routes } from 'vue-router/auto-routes'
 
 import App from './App.vue'
 
-import { electronStageProactiveCheckIn } from '../shared/eventa/auto-presence'
+import {
+  electronStageProactiveCheckIn,
+  electronStageProactiveHide,
+  electronStageProactiveReply,
+  electronStageProactiveSetPinned,
+} from '../shared/eventa/auto-presence'
 import { i18n } from './modules/i18n'
 import { resolveInitialRendererRoutePath, resolveRendererWindowContext } from './window-context'
 
@@ -54,14 +59,24 @@ function initializeProactiveCheckInBubble() {
     return
 
   const context = getElectronEventaContext()
+  const hideAiri = useElectronEventaInvoke(electronStageProactiveHide, context)
+  const replyToAiri = useElectronEventaInvoke(electronStageProactiveReply, context)
+  const setPinned = useElectronEventaInvoke(electronStageProactiveSetPinned, context)
+
   let bubble: HTMLDivElement | undefined
   let dismissTimer: ReturnType<typeof setTimeout> | undefined
+  let pinned = false
+
+  function clearDismissTimer() {
+    if (!dismissTimer)
+      return
+
+    clearTimeout(dismissTimer)
+    dismissTimer = undefined
+  }
 
   function removeBubble() {
-    if (dismissTimer) {
-      clearTimeout(dismissTimer)
-      dismissTimer = undefined
-    }
+    clearDismissTimer()
 
     if (!bubble)
       return
@@ -70,38 +85,158 @@ function initializeProactiveCheckInBubble() {
     bubble = undefined
   }
 
+  function scheduleBubbleDismiss() {
+    clearDismissTimer()
+    dismissTimer = setTimeout(removeBubble, 30 * 1000)
+  }
+
   context.on(electronStageProactiveCheckIn, (event) => {
     const text = event?.body?.text?.trim()
     if (!text)
       return
 
     removeBubble()
+    pinned = false
 
-    bubble = document.createElement('div')
-    bubble.textContent = text
-    Object.assign(bubble.style, {
+    const panel = document.createElement('div')
+    const message = document.createElement('div')
+    const replyButton = document.createElement('button')
+    const actions = document.createElement('div')
+    const hideButton = document.createElement('button')
+    const pinButton = document.createElement('button')
+    const tail = document.createElement('div')
+
+    message.textContent = text
+    replyButton.textContent = 'Trả lời...'
+    hideButton.textContent = 'Ẩn'
+    pinButton.textContent = 'Giữ'
+
+    Object.assign(panel.style, {
       position: 'fixed',
-      top: '18px',
-      left: '50%',
+      top: '92px',
+      right: '96px',
       zIndex: '2147483647',
-      maxWidth: '82%',
-      padding: '10px 14px',
-      border: '1px solid rgba(255, 255, 255, 0.75)',
-      borderRadius: '16px',
-      background: 'rgba(255, 255, 255, 0.94)',
-      boxShadow: '0 8px 28px rgba(0, 0, 0, 0.18)',
+      width: '300px',
+      maxWidth: 'calc(100vw - 118px)',
+      padding: '12px',
+      border: '1px solid rgba(255, 255, 255, 0.82)',
+      borderRadius: '18px',
+      background: 'rgba(255, 255, 255, 0.97)',
+      boxShadow: '0 10px 30px rgba(0, 0, 0, 0.18)',
       color: '#202124',
       fontFamily: 'inherit',
       fontSize: '14px',
       lineHeight: '1.4',
-      textAlign: 'center',
-      transform: 'translateX(-50%)',
-      pointerEvents: 'none',
+      pointerEvents: 'auto',
       userSelect: 'none',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '10px',
+      opacity: '0',
+      transform: 'translateX(14px)',
+      transition: 'opacity 160ms ease, transform 160ms ease',
     })
-    document.body.appendChild(bubble)
 
-    dismissTimer = setTimeout(removeBubble, 30 * 1000)
+    Object.assign(message.style, {
+      whiteSpace: 'pre-wrap',
+      overflowWrap: 'anywhere',
+    })
+
+    Object.assign(replyButton.style, {
+      width: '100%',
+      minHeight: '38px',
+      padding: '8px 12px',
+      border: '1px solid rgba(32, 33, 36, 0.12)',
+      borderRadius: '12px',
+      background: 'rgba(236, 252, 255, 0.96)',
+      color: '#1683a6',
+      font: 'inherit',
+      textAlign: 'left',
+      cursor: 'pointer',
+    })
+
+    Object.assign(actions.style, {
+      display: 'flex',
+      justifyContent: 'flex-end',
+      gap: '8px',
+    })
+
+    for (const button of [hideButton, pinButton]) {
+      Object.assign(button.style, {
+        minWidth: '64px',
+        height: '32px',
+        padding: '0 12px',
+        border: '1px solid rgba(32, 33, 36, 0.12)',
+        borderRadius: '10px',
+        background: '#fff',
+        color: '#202124',
+        font: 'inherit',
+        cursor: 'pointer',
+      })
+    }
+
+    Object.assign(tail.style, {
+      position: 'absolute',
+      right: '-7px',
+      top: '52px',
+      width: '14px',
+      height: '14px',
+      borderTop: '1px solid rgba(255, 255, 255, 0.82)',
+      borderRight: '1px solid rgba(255, 255, 255, 0.82)',
+      background: 'rgba(255, 255, 255, 0.97)',
+      transform: 'rotate(45deg)',
+    })
+
+    replyButton.onclick = async () => {
+      clearDismissTimer()
+      try {
+        await replyToAiri()
+        removeBubble()
+      }
+      catch {
+        scheduleBubbleDismiss()
+      }
+    }
+
+    hideButton.onclick = async () => {
+      try {
+        await hideAiri()
+      }
+      finally {
+        removeBubble()
+      }
+    }
+
+    pinButton.onclick = async () => {
+      const nextPinned = !pinned
+      try {
+        pinned = await setPinned({ pinned: nextPinned })
+        pinButton.textContent = pinned ? 'Bỏ giữ' : 'Giữ'
+
+        if (pinned)
+          clearDismissTimer()
+        else
+          scheduleBubbleDismiss()
+      }
+      catch {}
+    }
+
+    actions.appendChild(hideButton)
+    actions.appendChild(pinButton)
+    panel.appendChild(message)
+    panel.appendChild(replyButton)
+    panel.appendChild(actions)
+    panel.appendChild(tail)
+
+    bubble = panel
+    document.body.appendChild(panel)
+
+    requestAnimationFrame(() => {
+      panel.style.opacity = '1'
+      panel.style.transform = 'translateX(0)'
+    })
+
+    scheduleBubbleDismiss()
   })
 }
 

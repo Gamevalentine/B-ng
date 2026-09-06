@@ -28,7 +28,12 @@ import { array, number, object, optional, string } from 'valibot'
 import icon from '../../../../resources/icon.png?asset'
 
 import { electronStartDraggingWindow } from '../../../shared/eventa'
-import { electronStageProactiveCheckIn } from '../../../shared/eventa/auto-presence'
+import {
+  electronStageProactiveCheckIn,
+  electronStageProactiveHide,
+  electronStageProactiveReply,
+  electronStageProactiveSetPinned,
+} from '../../../shared/eventa/auto-presence'
 import { onAppBeforeQuit } from '../../libs/bootkit/lifecycle'
 import { baseUrl, getElectronMainDirname, load, withHashRoute } from '../../libs/electron/location'
 import { createConfig } from '../../libs/electron/persistence'
@@ -55,8 +60,7 @@ const HUMAN_WAKE_RETRY_MS = 60 * 1000
 const USER_ACTIVE_IDLE_SECONDS = 5 * 60
 const PROACTIVE_WAKE_MIN_MS = 45 * 60 * 1000
 const PROACTIVE_WAKE_MAX_MS = 120 * 60 * 1000
-const PROACTIVE_DISMISS_MIN_MS = 20 * 1000
-const PROACTIVE_DISMISS_MAX_MS = 30 * 1000
+const PROACTIVE_AIRI_VISIBLE_MS = 3 * 60 * 1000
 const PROACTIVE_MESSAGES = [
   'Anh vẫn đang làm việc à?',
   'Nghỉ một chút chưa?',
@@ -145,16 +149,58 @@ export async function setupMainWindow(params: {
   let allowClose = false
   let humanWakeTimer: ReturnType<typeof setTimeout> | undefined
   let proactiveWakeTimer: ReturnType<typeof setTimeout> | undefined
-  let proactiveDismissTimer: ReturnType<typeof setTimeout> | undefined
+  let proactiveHideTimer: ReturnType<typeof setTimeout> | undefined
+  let proactivePinned = false
   let proactiveActiveSince: number | undefined
   let proactiveWakeAfterMs = randomDelay(PROACTIVE_WAKE_MIN_MS, PROACTIVE_WAKE_MAX_MS)
 
-  function clearProactiveDismissTimer() {
-    if (!proactiveDismissTimer)
+  function clearProactiveHideTimer() {
+    if (!proactiveHideTimer)
       return
 
-    clearTimeout(proactiveDismissTimer)
-    proactiveDismissTimer = undefined
+    clearTimeout(proactiveHideTimer)
+    proactiveHideTimer = undefined
+  }
+
+  function isChatWindowVisible() {
+    return BrowserWindow.getAllWindows().some(candidate => (
+      candidate !== window
+      && !candidate.isDestroyed()
+      && candidate.getTitle() === 'Chat'
+      && candidate.isVisible()
+    ))
+  }
+
+  function scheduleAiriAutoHide(delay = PROACTIVE_AIRI_VISIBLE_MS) {
+    clearProactiveHideTimer()
+
+    proactiveHideTimer = setTimeout(() => {
+      proactiveHideTimer = undefined
+
+      if (window.isDestroyed() || !window.isVisible() || proactivePinned)
+        return
+
+      if (isChatWindowVisible()) {
+        scheduleAiriAutoHide()
+        return
+      }
+
+      window.hide()
+    }, delay)
+  }
+
+  function showAiriMessage(text: string) {
+    if (!window.isVisible())
+      window.showInactive()
+
+    stageEventaContext.emit(electronStageProactiveCheckIn, { text })
+
+    if (!proactivePinned)
+      scheduleAiriAutoHide()
+  }
+
+  function randomProactiveMessage() {
+    return PROACTIVE_MESSAGES[Math.floor(Math.random() * PROACTIVE_MESSAGES.length)] ?? PROACTIVE_MESSAGES[0]
   }
 
   function resetProactiveActivity() {
@@ -194,7 +240,7 @@ export async function setupMainWindow(params: {
           return
         }
 
-        window.showInactive()
+        showAiriMessage(randomProactiveMessage())
       }
 
       scheduleHumanWake()
@@ -244,21 +290,43 @@ export async function setupMainWindow(params: {
         return
       }
 
-      const text = PROACTIVE_MESSAGES[Math.floor(Math.random() * PROACTIVE_MESSAGES.length)] ?? PROACTIVE_MESSAGES[0]
-      window.showInactive()
-      stageEventaContext.emit(electronStageProactiveCheckIn, { text })
-
-      clearProactiveDismissTimer()
-      proactiveDismissTimer = setTimeout(() => {
-        proactiveDismissTimer = undefined
-        if (!window.isDestroyed() && window.isVisible() && !window.isFocused())
-          window.hide()
-      }, randomDelay(PROACTIVE_DISMISS_MIN_MS, PROACTIVE_DISMISS_MAX_MS))
+      showAiriMessage(randomProactiveMessage())
 
       resetProactiveActivity()
       scheduleProactiveWake(getNextProactiveActivityCheckDelay())
     }, delayOverride)
   }
+
+  const cleanUpProactiveHideInvoke = defineInvokeHandler(stageEventaContext, electronStageProactiveHide, () => {
+    proactivePinned = false
+    clearProactiveHideTimer()
+    if (!window.isDestroyed())
+      window.hide()
+  })
+
+  const cleanUpProactiveReplyInvoke = defineInvokeHandler(stageEventaContext, electronStageProactiveReply, async () => {
+    const chat = await params.chatWindow()
+    if (chat.isDestroyed())
+      return
+
+    if (!chat.isVisible())
+      chat.show()
+    chat.focus()
+
+    if (!proactivePinned)
+      scheduleAiriAutoHide()
+  })
+
+  const cleanUpProactiveSetPinnedInvoke = defineInvokeHandler(stageEventaContext, electronStageProactiveSetPinned, ({ pinned }) => {
+    proactivePinned = pinned
+
+    if (proactivePinned)
+      clearProactiveHideTimer()
+    else if (window.isVisible())
+      scheduleAiriAutoHide()
+
+    return proactivePinned
+  })
 
   function handleProactiveActivityBreak() {
     resetProactiveActivity()
@@ -273,7 +341,10 @@ export async function setupMainWindow(params: {
       clearTimeout(humanWakeTimer)
     if (proactiveWakeTimer)
       clearTimeout(proactiveWakeTimer)
-    clearProactiveDismissTimer()
+    clearProactiveHideTimer()
+    cleanUpProactiveHideInvoke()
+    cleanUpProactiveReplyInvoke()
+    cleanUpProactiveSetPinnedInvoke()
     powerMonitor.removeListener('suspend', handleProactiveActivityBreak)
     powerMonitor.removeListener('lock-screen', handleProactiveActivityBreak)
   })
@@ -322,13 +393,17 @@ export async function setupMainWindow(params: {
 
   window.on('resize', () => handleNewBounds(window.getBounds()))
   window.on('move', () => handleNewBounds(window.getBounds()))
-  window.on('focus', clearProactiveDismissTimer)
+  window.on('hide', () => {
+    proactivePinned = false
+    clearProactiveHideTimer()
+  })
   window.on('close', (event) => {
     if (allowClose) {
       return
     }
 
-    clearProactiveDismissTimer()
+    proactivePinned = false
+    clearProactiveHideTimer()
     event.preventDefault()
     window.hide()
   })

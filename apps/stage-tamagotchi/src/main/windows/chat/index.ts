@@ -23,9 +23,12 @@ export function setupChatWindowReusableFunc(params: {
   return createReusableWindow(async () => {
     const window = new BrowserWindow({
       title: 'Chat',
-      width: 600.0,
-      height: 800.0,
+      width: 420.0,
+      height: 540.0,
+      minWidth: 360.0,
+      minHeight: 460.0,
       show: false,
+      autoHideMenuBar: true,
       icon,
       webPreferences: {
         preload: join(getElectronMainDirname(), '../preload/index.mjs'),
