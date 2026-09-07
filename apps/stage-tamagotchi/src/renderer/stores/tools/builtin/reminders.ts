@@ -33,12 +33,15 @@ function weekdayFromText(text: string) {
   const match = text.match(/\bthu\s*(2|3|4|5|6|7|hai|ba|tu|nam|sau|bay)\b|\bchu nhat\b/)
   if (!match)
     return undefined
-  if (match[0].includes('chu nhat'))
+  if ((match[0] ?? '').includes('chu nhat'))
     return 0
 
   const token = match[1]
+  if (!token)
+    return undefined
+
   const named: Record<string, number> = { hai: 1, ba: 2, tu: 3, nam: 4, sau: 5, bay: 6 }
-  if (token && token in named)
+  if (token in named)
     return named[token]
 
   const numeric = Number(token)
@@ -51,13 +54,13 @@ function parseTimeExpression(when: string, requestedRepeat?: ReminderRepeat, now
 
   const relativeMinutes = text.match(/(?:sau\s+)?(\d+)\s*phut(?:\s*nua)?/)
   if (relativeMinutes) {
-    const triggerAt = now.getTime() + Number(relativeMinutes[1]) * 60 * 1000
+    const triggerAt = now.getTime() + Number(relativeMinutes[1] ?? 0) * 60 * 1000
     return { triggerAt, repeat }
   }
 
   const relativeHours = text.match(/(?:sau\s+)?(\d+(?:[.,]\d+)?)\s*gio(?:\s*nua)?/)
-  if (relativeHours && /nua|sau\s+/.test(relativeHours[0])) {
-    const hours = Number(relativeHours[1].replace(',', '.'))
+  if (relativeHours && /nua|sau\s+/.test(relativeHours[0] ?? '')) {
+    const hours = Number((relativeHours[1] ?? '0').replace(',', '.'))
     const triggerAt = now.getTime() + hours * 60 * 60 * 1000
     return { triggerAt, repeat }
   }
@@ -68,8 +71,8 @@ function parseTimeExpression(when: string, requestedRepeat?: ReminderRepeat, now
 
   const dateMatch = text.match(/\b(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{4}))?\b/)
   if (dateMatch) {
-    const day = Number(dateMatch[1])
-    const month = Number(dateMatch[2]) - 1
+    const day = Number(dateMatch[1] ?? 0)
+    const month = Number(dateMatch[2] ?? 0) - 1
     const year = dateMatch[3] ? Number(dateMatch[3]) : now.getFullYear()
     target.setFullYear(year, month, day)
     explicitDay = true
@@ -81,18 +84,18 @@ function parseTimeExpression(when: string, requestedRepeat?: ReminderRepeat, now
 
   const weekday = weekdayFromText(text)
   if (weekday !== undefined) {
-    let daysAhead = (weekday - target.getDay() + 7) % 7
+    const daysAhead = (weekday - target.getDay() + 7) % 7
     if (daysAhead > 0)
       target.setDate(target.getDate() + daysAhead)
     explicitDay = true
   }
 
-  const timeSource = dateMatch ? text.replace(dateMatch[0], ' ') : text
-  const timeMatch = timeSource.match(/\b(\d{1,2})(?:\s*(?::|h|gio)\s*(\d{1,2})?)\s*(sang|trua|chieu|toi|dem)?\b/)
+  const timeSource = dateMatch ? text.replace(dateMatch[0] ?? '', ' ') : text
+  const timeMatch = timeSource.match(/\b(\d{1,2})\s*(?::|h|gio)\s*(\d{1,2})?\s*(sang|trua|chieu|toi|dem)?\b/)
   if (!timeMatch)
     throw new Error(`Không nhận ra thời gian "${when}". Ví dụ: "12 giờ", "8:30 tối nay", "30 phút nữa", "thứ 2 7 giờ".`)
 
-  let hour = Number(timeMatch[1])
+  let hour = Number(timeMatch[1] ?? 0)
   const minute = Number(timeMatch[2] ?? 0)
   const dayPart = timeMatch[3]
 
