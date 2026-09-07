@@ -70,6 +70,8 @@ function initializeProactiveMiniChat() {
   const hideAiri = useElectronEventaInvoke(electronStageProactiveHide, context)
   const setPinned = useElectronEventaInvoke(electronStageProactiveSetPinned, context)
   const setIgnoreMouseEvents = useElectronEventaInvoke(electron.window.setIgnoreMouseEvents, context)
+  const getWindowBounds = useElectronEventaInvoke(electron.window.getBounds, context)
+  const setWindowBounds = useElectronEventaInvoke(electron.window.setBounds, context)
   const chatStore = useChatStore(pinia)
   const chatSession = useChatSessionStore(pinia)
 
@@ -81,6 +83,72 @@ function initializeProactiveMiniChat() {
   let miniChatOpen = false
   let sending = false
   let messages: MiniMessage[] = []
+  const panelReserveWidth = 320
+  let panelSpaceReserved = false
+
+  function getStageRoot() {
+    const root = document.getElementById('app')
+    return root instanceof HTMLElement ? root : undefined
+  }
+
+  function clearStageReservation() {
+    const root = getStageRoot()
+    if (!root)
+      return
+
+    root.style.width = ''
+    root.style.maxWidth = ''
+    root.style.marginLeft = ''
+  }
+
+  async function reservePanelSpace() {
+    if (panelSpaceReserved)
+      return
+
+    await new Promise(resolve => setTimeout(resolve, 180))
+
+    const bounds = await getWindowBounds()
+    const root = getStageRoot()
+
+    try {
+      await setWindowBounds([{
+        ...bounds,
+        x: bounds.x - panelReserveWidth,
+        width: bounds.width + panelReserveWidth,
+      }, false])
+
+      if (root) {
+        root.style.width = `${bounds.width}px`
+        root.style.maxWidth = `${bounds.width}px`
+        root.style.marginLeft = `${panelReserveWidth}px`
+      }
+
+      panelSpaceReserved = true
+    }
+    catch {
+      clearStageReservation()
+    }
+  }
+
+  async function releasePanelSpace() {
+    if (!panelSpaceReserved)
+      return
+
+    panelSpaceReserved = false
+
+    try {
+      const bounds = await getWindowBounds()
+      await setWindowBounds([{
+        ...bounds,
+        x: bounds.x + panelReserveWidth,
+        width: Math.max(320, bounds.width - panelReserveWidth),
+      }, false])
+    }
+    catch {}
+    finally {
+      clearStageReservation()
+    }
+  }
 
   function clearDismissTimer() {
     if (!dismissTimer)
@@ -116,16 +184,18 @@ function initializeProactiveMiniChat() {
     interactionKeepAliveTimer = setInterval(keepPanelInteractive, 400)
   }
 
-  function destroyPanel() {
+  function destroyPanel(options: { releaseSpace?: boolean } = {}) {
     clearDismissTimer()
     clearChatIdleTimer()
     stopInteractionKeepAlive()
 
-    if (!panel)
-      return
+    if (panel) {
+      panel.remove()
+      panel = undefined
+    }
 
-    panel.remove()
-    panel = undefined
+    if (options.releaseSpace !== false)
+      void releasePanelSpace()
   }
 
   async function syncPinnedState() {
@@ -169,10 +239,10 @@ function initializeProactiveMiniChat() {
     Object.assign(nextPanel.style, {
       position: 'fixed',
       top: '78px',
-      right: '138px',
+      left: '18px',
       zIndex: '2147483647',
       width: '286px',
-      maxWidth: 'calc(100vw - 152px)',
+      maxWidth: '286px',
       maxHeight: '410px',
       padding: '12px',
       border: '1px solid rgba(255, 255, 255, 0.82)',
@@ -189,7 +259,7 @@ function initializeProactiveMiniChat() {
       flexDirection: 'column',
       gap: '10px',
       opacity: '0',
-      transform: 'translateX(14px)',
+      transform: 'translateX(-14px)',
       transition: 'opacity 160ms ease, transform 160ms ease',
     })
 
@@ -432,12 +502,13 @@ function initializeProactiveMiniChat() {
     requestAnimationFrame(() => input.focus())
   }
 
-  function renderPrompt(text: string) {
-    destroyPanel()
+  async function renderPrompt(text: string) {
+    destroyPanel({ releaseSpace: false })
     userPinned = false
     miniChatOpen = false
     messages = [{ role: 'assistant', text }]
 
+    await reservePanelSpace()
     panel = createBasePanel()
 
     const message = document.createElement('div')
@@ -495,7 +566,7 @@ function initializeProactiveMiniChat() {
     if (!text)
       return
 
-    renderPrompt(text)
+    void renderPrompt(text)
   })
 }
 
