@@ -5,6 +5,7 @@ import { useLlmToolsStore } from '@proj-airi/stage-ui/stores/ai/chat-llm/tools'
 import { defineStore } from 'pinia'
 
 import { imageJournalTools } from './builtin/image-journal'
+import { reminderTools } from './builtin/reminders'
 import { weatherTools } from './builtin/weather'
 import { widgetsTools } from './builtin/widgets'
 
@@ -13,10 +14,19 @@ export const widgetToolReferences = [
   { name: 'get_weather' },
 ] satisfies ChatToolReference[]
 
+export const reminderToolReferences = [
+  { name: 'set_reminder' },
+  { name: 'list_reminders' },
+  { name: 'cancel_reminder' },
+] satisfies ChatToolReference[]
+
 export const artistryToolReferences = [
   { name: 'image_journal' },
   ...widgetToolReferences,
+  ...reminderToolReferences,
 ] satisfies ChatToolReference[]
+
+const reminderToolNames = new Set(reminderToolReferences.map(tool => tool.name))
 
 export const useTamagotchiBuiltinToolsStore = defineStore('tamagotchi-builtin-tools', () => {
   const llmToolsStore = useLlmToolsStore()
@@ -33,12 +43,13 @@ export const useTamagotchiBuiltinToolsStore = defineStore('tamagotchi-builtin-to
       imageJournalTools(),
       widgetsTools(),
       weatherTools(),
+      reminderTools(),
     ])).flat()
 
     llmToolsStore.removeToolsByIds(...registeredToolIds())
     llmToolsStore.addTools(...tools.map(tool => ({
       ...tool,
-      defaultActive: false,
+      defaultActive: reminderToolNames.has(tool.function.name),
       id: `${toolIdPrefix}${tool.function.name}`,
     } satisfies ExecutableTool)))
   }
