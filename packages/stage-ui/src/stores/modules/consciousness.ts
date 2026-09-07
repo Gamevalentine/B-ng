@@ -5,11 +5,13 @@ import { refManualReset } from '@vueuse/core'
 import { defineStore } from 'pinia'
 import { computed, watch } from 'vue'
 
+import { useProviderConfigStore } from '../providers/config'
 import { useProviderStore } from '../providers/provider'
 import { useConsciousnessSettingsStore } from './consciousness-settings'
 
 export const useConsciousnessStore = defineStore('consciousness', () => {
   const providersStore = useProviderStore()
+  const providerConfigStore = useProviderConfigStore()
   const settingsStore = useConsciousnessSettingsStore()
 
   // Pinia synchronization owns live cross-window state. localStorage remains
@@ -54,6 +56,12 @@ export const useConsciousnessStore = defineStore('consciousness', () => {
     )
   })
 
+  const configuredZaiProviderId = computed(() => {
+    return Object.values(providerConfigStore.providers)
+      .find(provider => provider.definitionId === 'zai' && provider.status === 'configured')
+      ?.id ?? ''
+  })
+
   function resetModelSelection() {
     activeModel.reset()
     activeCustomModelName.reset()
@@ -94,6 +102,64 @@ export const useConsciousnessStore = defineStore('consciousness', () => {
 
     return []
   }
+
+  async function resolveModelForProvider(providerId: string) {
+    const configuredModel = providerConfigStore.getProviderConfig(providerId)?.model
+    if (typeof configuredModel === 'string' && configuredModel.trim())
+      return configuredModel.trim()
+
+    await loadModelsForProvider(providerId)
+
+    return providersStore.getDefaultModelForProvider(providerId)
+      ?? providersStore.getModelsForProvider(providerId)[0]?.id
+      ?? ''
+  }
+
+  async function activateProvider(providerId: string) {
+    const model = await resolveModelForProvider(providerId)
+    if (!model)
+      return false
+
+    activeProvider.value = providerId
+    activeModel.value = model
+    return true
+  }
+
+  // Prefer a configured Z.ai provider over the authenticated AIRI Cloud
+  // provider. This keeps chat independent from Flux once a Z.ai API key is
+  // configured, while still respecting any other custom provider explicitly
+  // selected by the user.
+  watch(configuredZaiProviderId, (zaiProviderId) => {
+    if (!zaiProviderId)
+      return
+
+    const current = providerConfigStore.getProvider(activeProvider.value)
+    if (current?.definitionId === 'zai' && current.status === 'configured')
+      return
+
+    if (activeProvider.value && current?.definitionId !== 'official')
+      return
+
+    void activateProvider(zaiProviderId)
+  }, { immediate: true })
+
+  // If the active Z.ai configuration becomes unavailable, fall back to the
+  // configured AIRI Cloud provider instead of leaving chat unusable.
+  watch(configuredZaiProviderId, (zaiProviderId, previousZaiProviderId) => {
+    if (zaiProviderId || !previousZaiProviderId)
+      return
+
+    const current = providerConfigStore.getProvider(activeProvider.value)
+    if (current?.definitionId !== 'zai')
+      return
+
+    const officialProviderId = Object.values(providerConfigStore.providers)
+      .find(provider => provider.definitionId === 'official' && provider.status === 'configured')
+      ?.id
+
+    if (officialProviderId)
+      void activateProvider(officialProviderId)
+  })
 
   /** Resolves a provider with the reasoning mode shared by every Consciousness input path. */
   async function getChatProviderInstance(provider: string) {
