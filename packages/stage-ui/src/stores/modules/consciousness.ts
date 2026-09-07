@@ -56,9 +56,22 @@ export const useConsciousnessStore = defineStore('consciousness', () => {
     )
   })
 
-  const configuredZaiProviderId = computed(() => {
+  function hasApiKey(providerId: string) {
+    const apiKey = providerConfigStore.getProviderConfig(providerId)?.apiKey
+    return typeof apiKey === 'string' && apiKey.trim().length > 0
+  }
+
+  // A provider can temporarily be validating/unconfigured while its persisted
+  // credentials are already usable. Basing routing on status caused startup
+  // races where Chat stayed on AIRI Cloud and consumed Flux. Credentials are
+  // the durable signal used for the strict Z.ai route instead.
+  const usableZaiProviderId = computed(() => {
+    const selected = providerConfigStore.getProvider(activeProvider.value)
+    if (selected?.definitionId === 'zai' && hasApiKey(selected.id))
+      return selected.id
+
     return Object.values(providerConfigStore.providers)
-      .find(provider => provider.definitionId === 'zai' && provider.status === 'configured')
+      .find(provider => provider.definitionId === 'zai' && hasApiKey(provider.id))
       ?.id ?? ''
   })
 
@@ -76,9 +89,9 @@ export const useConsciousnessStore = defineStore('consciousness', () => {
   // provider's model and chat requests failed upstream with model_not_found.
   //
   // The watcher is synchronous on purpose: call sites assign the provider
-  // first and a new model right after, so a
-  // deferred reset would wipe the model they just chose. Synchronous flush
-  // makes "set provider, then set model" a safe, ordered operation.
+  // first and a new model right after, so a deferred reset would wipe the model
+  // they just chose. Synchronous flush makes "set provider, then set model" a
+  // safe, ordered operation.
   //
   // Issue #1761: https://github.com/moeru-ai/airi/issues/1761
   watch(activeProvider, (provider, oldProvider) => {
@@ -125,10 +138,10 @@ export const useConsciousnessStore = defineStore('consciousness', () => {
     return true
   }
 
-  // Prefer a configured Z.ai provider over the authenticated AIRI Cloud
-  // provider. Once Z.ai is selected, keep it selected even if its validation
-  // status changes transiently; never silently switch chat back to Flux.
-  watch(configuredZaiProviderId, (zaiProviderId) => {
+  // Keep the UI selection aligned with Z.ai when AIRI Cloud (official) is the
+  // current/default provider. This is only convenience; executeSend also calls
+  // resolveChatTarget() so routing does not depend on watcher timing.
+  watch(usableZaiProviderId, (zaiProviderId) => {
     if (!zaiProviderId)
       return
 
@@ -141,6 +154,45 @@ export const useConsciousnessStore = defineStore('consciousness', () => {
 
     void activateProvider(zaiProviderId)
   }, { immediate: true })
+
+  /**
+   * Resolves the provider/model for an outbound chat request.
+   *
+   * The custom desktop build must never silently spend Flux. When the selected
+   * provider is AIRI Cloud (or stale/empty), a persisted Z.ai credential is
+   * selected at send time. If none exists, the request is stopped locally
+   * before an AIRI Cloud provider instance can be created.
+   */
+  async function resolveChatTarget() {
+    const currentProviderId = activeProvider.value
+    const currentProvider = providerConfigStore.getProvider(currentProviderId)
+
+    if (currentProvider && currentProvider.definitionId !== 'official') {
+      const modelId = activeModel.value || await resolveModelForProvider(currentProviderId)
+      if (!modelId)
+        throw new Error(`No chat model configured for provider "${currentProviderId}"`)
+
+      if (!activeModel.value)
+        activeModel.value = modelId
+
+      return { providerId: currentProviderId, modelId }
+    }
+
+    const zaiProviderId = usableZaiProviderId.value
+    if (!zaiProviderId) {
+      throw new Error('Z.ai chưa được cấu hình API key. AIRI Cloud/Flux đã bị chặn để tránh phát sinh Flux.')
+    }
+
+    const modelId = await resolveModelForProvider(zaiProviderId)
+    if (!modelId)
+      throw new Error('Z.ai chưa có model khả dụng. AIRI Cloud/Flux đã bị chặn.')
+
+    if (activeProvider.value !== zaiProviderId)
+      activeProvider.value = zaiProviderId
+    activeModel.value = modelId
+
+    return { providerId: zaiProviderId, modelId }
+  }
 
   /** Resolves a provider with the reasoning mode shared by every Consciousness input path. */
   async function getChatProviderInstance(provider: string) {
@@ -178,6 +230,7 @@ export const useConsciousnessStore = defineStore('consciousness', () => {
     resetModelSelection,
     loadModelsForProvider,
     getModelsForProvider,
+    resolveChatTarget,
     getChatProviderInstance,
     resetState,
   }
