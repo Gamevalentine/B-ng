@@ -142,14 +142,14 @@ function reminderInvokes() {
 const setReminderParams = z.object({
   message: z.string().min(1).describe('What AIRI should remind the user about.'),
   when: z.string().min(1).describe('The user time expression, preferably preserved verbatim, e.g. "12 giờ", "30 phút nữa", "8 giờ tối nay", "thứ 2 7 giờ", "mỗi ngày 7 giờ".'),
-  repeat: z.enum(['none', 'daily', 'weekly']).optional().describe('Optional recurrence. Infer daily/weekly when the user explicitly asks for repetition.'),
+  repeat: z.enum(['none', 'daily', 'weekly']).describe('Recurrence. Use "none" for a one-time reminder, "daily" for every day, or "weekly" for every week.'),
 })
 
 const cancelReminderParams = z.object({
   id: z.string().min(1).describe('Reminder id returned by list_reminders.'),
 })
 
-async function executeSetReminder(input: { message: string, when: string, repeat?: ReminderRepeat }) {
+async function executeSetReminder(input: { message: string, when: string, repeat: ReminderRepeat }) {
   const parsed = parseTimeExpression(input.when, input.repeat)
   const reminder = await reminderInvokes().create({
     message: input.message.trim(),
