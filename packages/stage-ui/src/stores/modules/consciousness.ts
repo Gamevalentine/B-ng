@@ -126,15 +126,14 @@ export const useConsciousnessStore = defineStore('consciousness', () => {
   }
 
   // Prefer a configured Z.ai provider over the authenticated AIRI Cloud
-  // provider. This keeps chat independent from Flux once a Z.ai API key is
-  // configured, while still respecting any other custom provider explicitly
-  // selected by the user.
+  // provider. Once Z.ai is selected, keep it selected even if its validation
+  // status changes transiently; never silently switch chat back to Flux.
   watch(configuredZaiProviderId, (zaiProviderId) => {
     if (!zaiProviderId)
       return
 
     const current = providerConfigStore.getProvider(activeProvider.value)
-    if (current?.definitionId === 'zai' && current.status === 'configured')
+    if (current?.definitionId === 'zai')
       return
 
     if (activeProvider.value && current?.definitionId !== 'official')
@@ -142,24 +141,6 @@ export const useConsciousnessStore = defineStore('consciousness', () => {
 
     void activateProvider(zaiProviderId)
   }, { immediate: true })
-
-  // If the active Z.ai configuration becomes unavailable, fall back to the
-  // configured AIRI Cloud provider instead of leaving chat unusable.
-  watch(configuredZaiProviderId, (zaiProviderId, previousZaiProviderId) => {
-    if (zaiProviderId || !previousZaiProviderId)
-      return
-
-    const current = providerConfigStore.getProvider(activeProvider.value)
-    if (current?.definitionId !== 'zai')
-      return
-
-    const officialProviderId = Object.values(providerConfigStore.providers)
-      .find(provider => provider.definitionId === 'official' && provider.status === 'configured')
-      ?.id
-
-    if (officialProviderId)
-      void activateProvider(officialProviderId)
-  })
 
   /** Resolves a provider with the reasoning mode shared by every Consciousness input path. */
   async function getChatProviderInstance(provider: string) {
