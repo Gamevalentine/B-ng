@@ -139,8 +139,8 @@ export const useConsciousnessStore = defineStore('consciousness', () => {
   }
 
   // Keep the UI selection aligned with Z.ai when AIRI Cloud (official) is the
-  // current/default provider. This is only convenience; executeSend also calls
-  // resolveChatTarget() so routing does not depend on watcher timing.
+  // current/default provider. This is only convenience; outbound provider
+  // resolution below does not depend on watcher timing.
   watch(usableZaiProviderId, (zaiProviderId) => {
     if (!zaiProviderId)
       return
@@ -179,9 +179,8 @@ export const useConsciousnessStore = defineStore('consciousness', () => {
     }
 
     const zaiProviderId = usableZaiProviderId.value
-    if (!zaiProviderId) {
+    if (!zaiProviderId)
       throw new Error('Z.ai chưa được cấu hình API key. AIRI Cloud/Flux đã bị chặn để tránh phát sinh Flux.')
-    }
 
     const modelId = await resolveModelForProvider(zaiProviderId)
     if (!modelId)
@@ -196,9 +195,28 @@ export const useConsciousnessStore = defineStore('consciousness', () => {
 
   /** Resolves a provider with the reasoning mode shared by every Consciousness input path. */
   async function getChatProviderInstance(provider: string) {
-    return providersStore.getChatProviderInstance(provider, {
-      reasoning: settingsStore.reasoning ? 'enabled' : 'disabled',
-    })
+    const reasoning = settingsStore.reasoning ? 'enabled' : 'disabled'
+    const requested = providerConfigStore.getProvider(provider)
+
+    // executeSend snapshots activeProvider/activeModel before awaiting provider
+    // creation. If that snapshot is AIRI Cloud, resolve the strict target here
+    // and pin the returned provider's chat() call to the Z.ai model as well.
+    // This closes the race completely: even a stale `official` snapshot cannot
+    // create an AIRI Cloud provider or send a Flux-backed request.
+    if (provider === activeProvider.value && (!requested || requested.definitionId === 'official')) {
+      const target = await resolveChatTarget()
+      const targetProvider = await providersStore.getChatProviderInstance(target.providerId, { reasoning })
+
+      if (target.providerId === provider)
+        return targetProvider
+
+      return {
+        ...targetProvider,
+        chat: () => targetProvider.chat(target.modelId),
+      }
+    }
+
+    return providersStore.getChatProviderInstance(provider, { reasoning })
   }
 
   const configured = computed(() => {
