@@ -198,12 +198,12 @@ export const useConsciousnessStore = defineStore('consciousness', () => {
     const reasoning = settingsStore.reasoning ? 'enabled' : 'disabled'
     const requested = providerConfigStore.getProvider(provider)
 
-    // executeSend snapshots activeProvider/activeModel before awaiting provider
-    // creation. If that snapshot is AIRI Cloud, resolve the strict target here
-    // and pin the returned provider's chat() call to the Z.ai model as well.
-    // This closes the race completely: even a stale `official` snapshot cannot
-    // create an AIRI Cloud provider or send a Flux-backed request.
-    if (provider === activeProvider.value && (!requested || requested.definitionId === 'official')) {
+    // A chat request can hold an `official` provider id captured before the
+    // asynchronous Z.ai activation watcher finishes. Guard the requested id
+    // itself rather than comparing it with the newer activeProvider state.
+    // That makes every stale AIRI Cloud snapshot resolve through the current
+    // non-Flux target and prevents an official provider instance from existing.
+    if (!requested || requested.definitionId === 'official') {
       const target = await resolveChatTarget()
       const targetProvider = await providersStore.getChatProviderInstance(target.providerId, { reasoning })
 
