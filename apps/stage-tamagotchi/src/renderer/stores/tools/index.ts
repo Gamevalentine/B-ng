@@ -1,5 +1,6 @@
 export {
   artistryToolReferences,
+  reminderToolReferences,
   useTamagotchiBuiltinToolsStore,
   widgetToolReferences,
 } from './built-in'
