@@ -92,6 +92,87 @@ describe('consciousness store provider selection', () => {
     expect(enabledProvider.chat('test-model')).toMatchObject({ reasoningEffort: 'medium' })
   })
 
+  it('resolves AIRI Cloud to Z.ai at send time even while Z.ai status is unconfigured', async () => {
+    const providerConfigStore = useProviderConfigStore()
+    providerConfigStore.ensureProvider('official-provider', 'official', { model: 'auto' })
+    providerConfigStore.ensureProvider('zai-primary', 'zai', {
+      apiKey: 'zai-test-key',
+      model: 'glm-4.5',
+    })
+    const store = useConsciousnessStore()
+
+    store.activeProvider = 'official-provider'
+    store.activeModel = 'auto'
+
+    const target = await store.resolveChatTarget()
+
+    expect(target).toEqual({ providerId: 'zai-primary', modelId: 'glm-4.5' })
+    expect(store.activeProvider).toBe('zai-primary')
+    expect(store.activeModel).toBe('glm-4.5')
+  })
+
+  it('blocks AIRI Cloud locally instead of spending Flux when Z.ai has no API key', async () => {
+    const providerConfigStore = useProviderConfigStore()
+    providerConfigStore.ensureProvider('official-provider', 'official', { model: 'auto' })
+    providerConfigStore.ensureProvider('zai-primary', 'zai', {
+      apiKey: '',
+      model: 'glm-4.5',
+    })
+    const store = useConsciousnessStore()
+
+    store.activeProvider = 'official-provider'
+    store.activeModel = 'auto'
+
+    await expect(store.resolveChatTarget()).rejects.toThrow('AIRI Cloud/Flux đã bị chặn')
+    expect(store.activeProvider).toBe('official-provider')
+  })
+
+  it('pins a stale official provider snapshot to the resolved Z.ai provider and model', async () => {
+    const providerConfigStore = useProviderConfigStore()
+    providerConfigStore.ensureProvider('official-provider', 'official', { model: 'auto' })
+    providerConfigStore.ensureProvider('zai-primary', 'zai', {
+      apiKey: 'zai-test-key',
+      model: 'glm-4.5',
+    })
+    const providersStore = useProviderStore()
+    const store = useConsciousnessStore()
+    const chat = vi.fn((model: string) => ({ model }))
+    const getChatProviderInstance = vi
+      .spyOn(providersStore, 'getChatProviderInstance')
+      .mockResolvedValue({ chat } as never)
+
+    store.activeProvider = 'official-provider'
+    store.activeModel = 'auto'
+
+    const provider = await store.getChatProviderInstance('official-provider')
+    provider.chat('auto')
+
+    expect(getChatProviderInstance).toHaveBeenCalledWith('zai-primary', { reasoning: 'disabled' })
+    expect(getChatProviderInstance).not.toHaveBeenCalledWith('official-provider', expect.anything())
+    expect(chat).toHaveBeenCalledWith('glm-4.5')
+  })
+
+  it('keeps an explicitly selected non-official provider instead of forcing Z.ai', async () => {
+    const providerConfigStore = useProviderConfigStore()
+    providerConfigStore.ensureProvider('openai-custom', 'openai', {
+      apiKey: 'sk-test',
+      model: 'gpt-4o-mini',
+    })
+    providerConfigStore.ensureProvider('zai-primary', 'zai', {
+      apiKey: 'zai-test-key',
+      model: 'glm-4.5',
+    })
+    const store = useConsciousnessStore()
+
+    store.activeProvider = 'openai-custom'
+    store.activeModel = 'gpt-4o-mini'
+
+    await expect(store.resolveChatTarget()).resolves.toEqual({
+      providerId: 'openai-custom',
+      modelId: 'gpt-4o-mini',
+    })
+  })
+
   // ROOT CAUSE:
   //
   // The model selection was only cleared on provider switches by a watcher in
