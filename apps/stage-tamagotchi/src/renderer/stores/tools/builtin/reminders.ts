@@ -1,5 +1,4 @@
 import type { Tool } from '@xsai/shared-chat'
-
 import type { ReminderRepeat, StageReminder } from '../../../../shared/eventa/reminders'
 
 import { getElectronEventaContext, useElectronEventaInvoke } from '@proj-airi/electron-vueuse'
@@ -15,7 +14,7 @@ import {
 function normalizeVietnamese(value: string) {
   return value
     .normalize('NFD')
-    .replace(/[\u0300-\u036F]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/đ/g, 'd')
     .replace(/Đ/g, 'D')
     .toLowerCase()
@@ -23,15 +22,15 @@ function normalizeVietnamese(value: string) {
 }
 
 function inferredRepeat(text: string): ReminderRepeat {
-  if (/\b(?:moi ngay|hang ngay|hangngay)\b/.test(text))
+  if (/\b(moi ngay|hang ngay|hangngay)\b/.test(text))
     return 'daily'
-  if (/\b(?:moi tuan|hang tuan)\b/.test(text) || /\bmoi thu\s*(?:[2-7]|hai|ba|tu|nam|sau|bay)\b/.test(text) || /\bmoi chu nhat\b/.test(text))
+  if (/\b(moi tuan|hang tuan)\b/.test(text) || /\bmoi thu\s*(2|3|4|5|6|7|hai|ba|tu|nam|sau|bay)\b/.test(text) || /\bmoi chu nhat\b/.test(text))
     return 'weekly'
   return 'none'
 }
 
 function weekdayFromText(text: string) {
-  const match = text.match(/\bthu\s*([2-7]|hai|ba|tu|nam|sau|bay)\b|\bchu nhat\b/)
+  const match = text.match(/\bthu\s*(2|3|4|5|6|7|hai|ba|tu|nam|sau|bay)\b|\bchu nhat\b/)
   if (!match)
     return undefined
   if ((match[0] ?? '').includes('chu nhat'))
@@ -70,7 +69,7 @@ function parseTimeExpression(when: string, requestedRepeat?: ReminderRepeat, now
   target.setSeconds(0, 0)
   let explicitDay = false
 
-  const dateMatch = text.match(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{4}))?\b/)
+  const dateMatch = text.match(/\b(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{4}))?\b/)
   if (dateMatch) {
     const day = Number(dateMatch[1] ?? 0)
     const month = Number(dateMatch[2] ?? 0) - 1
@@ -78,7 +77,7 @@ function parseTimeExpression(when: string, requestedRepeat?: ReminderRepeat, now
     target.setFullYear(year, month, day)
     explicitDay = true
   }
-  else if (/\b(?:ngay mai|mai)\b/.test(text)) {
+  else if (/\b(ngay mai|mai)\b/.test(text)) {
     target.setDate(target.getDate() + 1)
     explicitDay = true
   }
@@ -92,7 +91,7 @@ function parseTimeExpression(when: string, requestedRepeat?: ReminderRepeat, now
   }
 
   const timeSource = dateMatch ? text.replace(dateMatch[0] ?? '', ' ') : text
-  const timeMatch = timeSource.match(/\b(\d{1,2})\s*(?::|h|gio)(?:\s*(\d{1,2}))?(?:\s+(sang|trua|chieu|toi|dem))?\b/)
+  const timeMatch = timeSource.match(/\b(\d{1,2})\s*(?::|h|gio)\s*(\d{1,2})?\s*(sang|trua|chieu|toi|dem)?\b/)
   if (!timeMatch)
     throw new Error(`Không nhận ra thời gian "${when}". Ví dụ: "12 giờ", "8:30 tối nay", "30 phút nữa", "thứ 2 7 giờ".`)
 
