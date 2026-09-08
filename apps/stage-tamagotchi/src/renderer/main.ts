@@ -64,10 +64,7 @@ function initializeProactiveMiniChat() {
   if (resolveInitialRendererRoutePath('/') !== '/')
     return
 
-  interface MiniMessage {
-    role: 'assistant' | 'user'
-    text: string
-  }
+  type MiniMessage = { role: 'assistant' | 'user', text: string }
 
   const context = getElectronEventaContext()
   const hideAiri = useElectronEventaInvoke(electronStageProactiveHide, context)
