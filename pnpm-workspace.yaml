@@ -195,7 +195,7 @@ catalog:
   '@types/mdast': ^4.0.4
   '@types/node': ^26.2.0
   '@types/nprogress': ^0.2.3
-  '@types/pg': ^8.23.0
+  '@types/pg': ^8.23.1
   '@types/semver': ^7.8.0
   '@types/splitpanes': ^2.2.6
   '@types/three': ^0.185.4
