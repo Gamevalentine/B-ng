@@ -16,7 +16,7 @@ export const useSettingsGeneral = defineStore('settings-general', () => {
   const websocketSecureEnabled = useLocalStorageManualReset<boolean>('settings/websocket/secure-enabled', false)
 
   function getLanguage() {
-    const language = localStorage.getItem('settings/language') || DEFAULT_LOCALE
+    const language = localStorage.getItem('settings/language') || navigator.language || DEFAULT_LOCALE
     return resolveSupportedLocale(language, Object.keys(messages!))
   }
 
@@ -31,6 +31,7 @@ export const useSettingsGeneral = defineStore('settings-general', () => {
 
   return {
     language,
+    disableTransitions,
     disableTransitions,
     usePageSpecificTransitions,
     websocketSecureEnabled,
