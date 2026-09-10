@@ -11,7 +11,7 @@ function parts(triggerAt: number) {
   return [date.getFullYear(), date.getMonth() + 1, date.getDate(), date.getHours(), date.getMinutes()]
 }
 
-describe('Vietnamese reminder time parsing', () => {
+describe('vietnamese reminder time parsing', () => {
   describe('relative durations', () => {
     it('parses explicit relative minutes', () => {
       const now = localDate(2026, 9, 10, 20)
@@ -30,7 +30,7 @@ describe('Vietnamese reminder time parsing', () => {
     })
   })
 
-  describe('Vietnamese day parts', () => {
+  describe('vietnamese day parts', () => {
     it('maps 1 giờ trưa to 13:00', () => {
       const now = localDate(2026, 9, 10, 10)
       expect(parts(parseTimeExpression('1 giờ trưa', 'none', now).triggerAt)).toEqual([2026, 9, 10, 13, 0])
