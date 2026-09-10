@@ -1,8 +1,8 @@
 name: Crowdin sync translations from remote
 
+# Forks do not receive the upstream Crowdin token. Keep manual dispatch for
+# owners who configure their own token, and avoid a guaranteed failing cron.
 on:
-  schedule:
-    - cron: '2 1 * * *' # random time every day
   workflow_dispatch:
 
 permissions:
