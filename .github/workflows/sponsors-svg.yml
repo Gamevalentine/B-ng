@@ -1,9 +1,10 @@
 name: Update Sponsors SVG
 
+# This fork does not inherit upstream SponsorKit secrets. Keep this workflow
+# available for manual runs after the required secrets are configured, but do
+# not fail the repository every day by scheduling it automatically.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '17 3 * * *'
 
 permissions:
   contents: write
