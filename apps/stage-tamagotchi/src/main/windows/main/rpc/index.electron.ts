@@ -25,13 +25,13 @@ import {
   electronStageReminderFired,
   electronStageReminderList,
 } from '../../../../shared/eventa/reminders'
+import { createConfig } from '../../../libs/electron/persistence'
 import { createAuthService } from '../../../services/airi/auth'
 import { createGodotStageService } from '../../../services/airi/godot-stage'
 import { createMcpServersService } from '../../../services/airi/mcp-servers'
 import { createOnboardingService } from '../../../services/airi/onboarding'
 import { createWidgetsService } from '../../../services/airi/widgets'
 import { createAutoUpdaterService } from '../../../services/electron'
-import { createConfig } from '../../../libs/electron/persistence'
 import { toggleWindowShow } from '../../shared'
 import { centerWindowOnDisplay } from '../../shared/display'
 import { setupBaseWindowElectronInvokes } from '../../shared/window'

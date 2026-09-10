@@ -482,7 +482,8 @@ allowBuilds:
   node-pty: true
   onnxruntime-node: true
   protobufjs: true
-  sharp: true
+  'sharp@0.29.3': false
+  'sharp@0.34.5': true
   simple-git-hooks: false # [workaround] With `shellEmulator: true`, simple-git-hooks install may fail when no .git dir exists.
   spawn-sync: true
   stockfish: true

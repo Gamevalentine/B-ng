@@ -18,6 +18,13 @@ function executableTool(name: string): Tool {
 vi.mock('./builtin/image-journal', () => ({
   imageJournalTools: vi.fn(async () => [executableTool('image_journal')]),
 }))
+vi.mock('./builtin/reminders', () => ({
+  reminderTools: vi.fn(async () => [
+    executableTool('set_reminder'),
+    executableTool('list_reminders'),
+    executableTool('cancel_reminder'),
+  ]),
+}))
 vi.mock('./builtin/weather', () => ({
   weatherTools: vi.fn(async () => [executableTool('get_weather')]),
 }))
@@ -32,12 +39,16 @@ describe('useTamagotchiBuiltinToolsStore', async () => {
     setActivePinia(createPinia())
   })
 
-  it('registers built-in executors as request-selected tools', async () => {
+  it('registers reminder tools as active by default', async () => {
     const toolsStore = useLlmToolsStore()
 
     await useTamagotchiBuiltinToolsStore().refresh()
 
-    expect(toolsStore.activeTools).toEqual([])
+    expect(toolsStore.activeTools.map(tool => tool.function.name)).toEqual([
+      'set_reminder',
+      'list_reminders',
+      'cancel_reminder',
+    ])
     expect(toolsStore.tools.map(tool => ({
       id: tool.id,
       defaultActive: tool.defaultActive,
@@ -45,6 +56,9 @@ describe('useTamagotchiBuiltinToolsStore', async () => {
       { id: 'tamagotchi:image_journal', defaultActive: false },
       { id: 'tamagotchi:stage_widgets', defaultActive: false },
       { id: 'tamagotchi:get_weather', defaultActive: false },
+      { id: 'tamagotchi:set_reminder', defaultActive: true },
+      { id: 'tamagotchi:list_reminders', defaultActive: true },
+      { id: 'tamagotchi:cancel_reminder', defaultActive: true },
     ])
     expect(toolsStore.getToolsByNames('get_weather')[0]?.function.name).toBe('get_weather')
   })
