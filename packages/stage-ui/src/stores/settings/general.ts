@@ -32,7 +32,6 @@ export const useSettingsGeneral = defineStore('settings-general', () => {
   return {
     language,
     disableTransitions,
-    disableTransitions,
     usePageSpecificTransitions,
     websocketSecureEnabled,
     getLanguage,
