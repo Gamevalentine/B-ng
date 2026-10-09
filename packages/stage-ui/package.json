@@ -176,7 +176,9 @@
     "xast-util-to-xml": "catalog:",
     "xastscript": "catalog:",
     "xsschema": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@proj-airi/vite-plugin-sherpaw": "workspace:^",
+    "@sherpaw/xsai-transcription": "catalog:"
   },
   "devDependencies": {
     "@fontsource-variable/comfortaa": "catalog:",

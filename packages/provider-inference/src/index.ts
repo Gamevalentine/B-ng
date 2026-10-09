@@ -21,3 +21,8 @@ export { createWebSpeechAPIProvider, streamWebSpeechAPITranscription } from './p
 export * from './providers/registry'
 export * from './types'
 export * from './validators'
+
+export { createSherpawTranscriptionDefinition, executeSherpawStream, SHERPAW_TRANSCRIPTION_PROVIDER_ID } from './providers/local/sherpaw-transcription'
+export type { SherpawModelResource, SherpawTranscriptionHost } from './providers/local/sherpaw-transcription'
+export * from './providers/local/sherpaw-transcription/models'
+export { joinTranscriptSegments } from './providers/local/sherpaw-transcription/transcript'
