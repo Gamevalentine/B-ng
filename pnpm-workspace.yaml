@@ -6,6 +6,10 @@ minimumReleaseAgeExclude:
   - '@vishot/*'
   - '@xsai/*'
   - '@xsai-apple-speech/*'
+  '@xsai-apple-vision/vision-electron-plugin': 0.1.0
+  '@xsai-apple-vision/vision-native': 0.1.0
+  '@xsai-apple-vision/vision-native-darwin-arm64': 0.1.0
+  - '@xsai-apple-vision/*'
   - '@xsai-ext/*'
   - '@xsai-transformers/*'
   - xsschema
@@ -49,6 +53,8 @@ catalog:
   '@antfu/eslint-config': 8.2.0
   '@anthropic-ai/claude-code': ^2.1.241
   '@arethetypeswrong/core': ^0.18.5
+  '@auv-js/cli': 0.0.28
+  '@auv-js/sdk': 0.0.28
   '@ax-llm/ax': ^24.0.5
   '@better-auth/cli': ^1.4.22
   '@better-auth/drizzle-adapter': 1.6.25
