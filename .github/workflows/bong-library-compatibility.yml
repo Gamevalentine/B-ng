@@ -1,0 +1,71 @@
+name: BONG library compatibility (draft branch)
+
+on:
+  push:
+    branches:
+      - bong/github-actions-migration-20261009
+    paths:
+      - 'packages/provider-inference/**'
+      - 'packages/stage-ui/**'
+      - 'packages/pipelines-audio/**'
+      - 'tools/bong-tts/**'
+      - 'apps/stage-tamagotchi/**'
+      - '.github/workflows/bong-library-compatibility.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bong-library-compatibility-draft
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Check BONG libraries and Electron build (no installer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      NODE_OPTIONS: --no-experimental-webstorage
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      VITE_ENABLE_POSTHOG: 'false'
+    steps:
+      - name: Checkout draft source
+        uses: actions/checkout@v6
+
+      - name: Node and pnpm (aligned with upstream CI)
+        uses: pnpm/setup@v2
+        with:
+          runtime: node@26.7.0
+          cache: true
+          install: false
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages used by desktop
+        run: pnpm run build:packages
+
+      - name: Typecheck offline voice provider
+        run: pnpm -F @proj-airi/provider-inference run typecheck
+
+      - name: Test Vietnamese segmentation
+        run: pnpm -F @proj-airi/pipelines-audio exec vitest run src/processors/bong-tts-segmentation.test.ts
+
+      - name: Typecheck Stage UI
+        run: pnpm -F @proj-airi/stage-ui run typecheck
+
+      - name: Build desktop Electron code without an installer
+        run: pnpm -F @proj-airi/stage-tamagotchi run build
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## BÔNG source-compatibility check'
+            echo 'This is a GitHub-hosted code check only.'
+            echo 'No model downloaded, no Gemini key used, no Windows installer built, no production release.'
+            echo 'Real microphone, speaker, Live2D lip sync and voice quality require separate Windows QA.'
+          } >> "$GITHUB_STEP_SUMMARY"
