@@ -19,7 +19,6 @@ import { useContextBridgeStore } from '@proj-airi/stage-ui/stores/mods/api/conte
 import { useAiriCardStore } from '@proj-airi/stage-ui/stores/modules/airi-card'
 import { useArtistryStore } from '@proj-airi/stage-ui/stores/modules/artistry'
 import { useConsciousnessStore } from '@proj-airi/stage-ui/stores/modules/consciousness'
-import { configureAsDefaultsIfEmpty, unconfigureAuthenticationProviders } from '@proj-airi/stage-ui/stores/modules/default'
 import { useHearingStore } from '@proj-airi/stage-ui/stores/modules/hearing'
 import { useSpeechStore } from '@proj-airi/stage-ui/stores/modules/speech'
 import { useVisionStore } from '@proj-airi/stage-ui/stores/modules/vision'
@@ -52,10 +51,13 @@ import {
   pluginProtocolListProvidersEventName,
 } from '../shared/eventa/plugin/capabilities'
 import {
+  electronPluginCancelDirectoryImport,
+  electronPluginCommitDirectoryImport,
   electronPluginInspect,
   electronPluginList,
   electronPluginLoad,
   electronPluginLoadEnabled,
+  electronPluginPrepareDirectoryImport,
   electronPluginSetAutoReload,
   electronPluginSetEnabled,
   electronPluginUnload,
@@ -64,6 +66,7 @@ import { electronPluginToolsChanged } from '../shared/eventa/plugin/tools'
 import { initializeElectronAuthCallbackBridge } from './bridges/electron-auth-callback'
 import { initializeStageThreeRuntimeTraceBridge } from './bridges/stage-three-runtime-trace'
 import { useLanguage } from './composables/use-language'
+import { useProactiveCompanionStore } from './stores/proactive-companion'
 import { useServerChannelSettingsStore } from './stores/settings/server-channel'
 import { useStageWindowLifecycleStore } from './stores/stage-window-lifecycle'
 import {
@@ -89,6 +92,8 @@ const mcpToolsStore = useTamagotchiMcpToolsStore()
 const pluginToolsStore = useTamagotchiPluginToolsStore()
 const syncedPinia = usePiniaSynced()
 const isSpotlightWindow = initialRoutePath === '/spotlight'
+// The floating chat resizes from its own grip, which keeps the corner beside the character in place.
+const isFloatingChatWindow = initialRoutePath === '/chat-floating'
 const isSettingsWindow = initialRoutePath === '/settings' || initialRoutePath.startsWith('/settings/')
 
 async function refreshPluginRuntimeTools() {
@@ -124,6 +129,7 @@ function createFullStageRuntime() {
   const cardStore = useAiriCardStore()
   const serverChannelStore = useModsServerChannelStore()
   const characterOrchestratorStore = useCharacterOrchestratorStore()
+  const proactiveCompanionStore = useProactiveCompanionStore()
   const inferencePreload = useInferencePreload()
   const pluginHostInspectorStore = usePluginHostInspectorStore()
   const stageWindowLifecycleStore = useStageWindowLifecycleStore()
@@ -137,13 +143,13 @@ function createFullStageRuntime() {
 
   let stopAuthenticatedSetup: (() => void) | undefined
   let stopLoggedOutSetup: (() => void) | undefined
+  let stopProactiveLeadership: (() => void) | undefined
 
   async function removeAuthenticationProviderConfiguration() {
     if (!syncedPinia.isLeader())
       return
 
-    if (await unconfigureAuthenticationProviders())
-      await cardStore.persistActiveCardModuleSelections()
+    await cardStore.configureForAuthentication(false)
   }
 
   function registerAuthenticatedSetup() {
@@ -151,8 +157,7 @@ function createFullStageRuntime() {
       if (!syncedPinia.isLeader())
         return
 
-      if (await configureAsDefaultsIfEmpty())
-        await cardStore.persistActiveCardModuleSelections()
+      await cardStore.configureForAuthentication(true)
       await onboardingStore.closeAfterAuthentication()
     })
     stopLoggedOutSetup ??= authStore.onLogout(removeAuthenticationProviderConfiguration)
@@ -161,6 +166,9 @@ function createFullStageRuntime() {
   const { activeProvider, artistryGlobals, activeModel, defaultPromptPrefix, providerOptions } = storeToRefs(artistryStore)
   const getServerChannelConfig = useElectronEventaInvoke(electronGetServerChannelConfig)
   const listPlugins = useElectronEventaInvoke(electronPluginList)
+  const preparePluginDirectoryImport = useElectronEventaInvoke(electronPluginPrepareDirectoryImport)
+  const commitPluginDirectoryImport = useElectronEventaInvoke(electronPluginCommitDirectoryImport)
+  const cancelPluginDirectoryImport = useElectronEventaInvoke(electronPluginCancelDirectoryImport)
   const setPluginEnabled = useElectronEventaInvoke(electronPluginSetEnabled)
   const setPluginAutoReload = useElectronEventaInvoke(electronPluginSetAutoReload)
   const loadEnabledPlugins = useElectronEventaInvoke(electronPluginLoadEnabled)
@@ -173,6 +181,21 @@ function createFullStageRuntime() {
   const syncArtistryConfig = useElectronEventaInvoke(artistrySyncConfig)
   const usesGodotStage = initialRoutePath === '/' || initialRoutePath.startsWith('/settings')
   const isWidgetsWindow = initialRoutePath === '/widgets'
+  const isMainStageWindow = initialRoutePath === '/'
+
+  function syncProactiveCompanionLeadership(isLeader = syncedPinia.isLeader()) {
+    if (isLeader && isMainStageWindow) {
+      proactiveCompanionStore.initialize()
+      return
+    }
+
+    proactiveCompanionStore.dispose()
+  }
+
+  function registerProactiveCompanionLeadership() {
+    stopProactiveLeadership ??= syncedPinia.onLeadershipChange(syncProactiveCompanionLeadership)
+    syncProactiveCompanionLeadership()
+  }
 
   function syncGodotStageRenderer(state: { state: 'stopped' | 'starting' | 'running' | 'stopping' | 'error' }) {
     if (state.state === 'running') {
@@ -196,6 +219,9 @@ function createFullStageRuntime() {
 
   // NOTICE: register plugin host bridge during setup to avoid race with pages using it in immediate watchers.
   pluginHostInspectorStore.setBridge({
+    prepareDirectoryImport: () => preparePluginDirectoryImport(),
+    commitDirectoryImport: payload => commitPluginDirectoryImport(payload),
+    cancelDirectoryImport: payload => cancelPluginDirectoryImport(payload),
     list: () => listPlugins(),
     setEnabled: async (payload) => {
       const result = await setPluginEnabled(payload)
@@ -257,6 +283,9 @@ function createFullStageRuntime() {
   return {
     async initialize() {
       initializeAnalytics()
+      // Approval processing must not wait for remote provider/plugin startup.
+      if (isMainStageWindow)
+        registerProactiveCompanionLeadership()
       await authStore.initialize()
       await displayModelsStore.initialize()
       await cardStore.initialize()
@@ -290,6 +319,8 @@ function createFullStageRuntime() {
       if (!isWidgetsWindow) {
         characterOrchestratorStore.initialize()
         await startTrackingCursorPoint()
+        if (isMainStageWindow)
+          registerProactiveCompanionLeadership()
       }
 
       defineInvokeHandler(context.value, pluginProtocolListProviders, async () => listProvidersForPluginHost())
@@ -309,6 +340,8 @@ function createFullStageRuntime() {
     dispose() {
       stopAuthenticatedSetup?.()
       stopLoggedOutSetup?.()
+      stopProactiveLeadership?.()
+      proactiveCompanionStore.dispose()
       contextBridgeStore.dispose()
     },
   }
@@ -369,9 +402,9 @@ onUnmounted(() => {
 
 <template>
   <ToasterRoot @close="id => toast.dismiss(id)">
-    <Toaster />
+    <Toaster container-aria-label="Thông báo" :toast-options="{ closeButtonAriaLabel: 'Đóng thông báo' }" />
   </ToasterRoot>
-  <ResizeHandler v-if="!isSpotlightWindow" />
+  <ResizeHandler v-if="!isSpotlightWindow && !isFloatingChatWindow" />
   <RouterView />
 </template>
 

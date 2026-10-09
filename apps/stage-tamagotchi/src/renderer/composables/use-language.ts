@@ -1,6 +1,5 @@
 import type { Ref } from 'vue'
 
-import { useLocalStorageManualReset } from '@proj-airi/stage-shared/composables'
 import { watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -26,37 +25,28 @@ export function useLanguage(
   setLocale: (locale: string) => Promise<unknown> | unknown,
 ) {
   const i18n = useI18n()
-  const persistedLanguage = useLocalStorageManualReset<string>('settings/language', '')
-  const hasPersistedLanguage = persistedLanguage.value !== ''
+  // Giữ tham số để không phá API của composable; bản dựng này cố định ngôn ngữ tiếng Việt.
+  void getMainLocale
   let isLocaleSynced = false
 
   // Guard: do not propagate the store's navigator.language fallback back
   // to main-process config before we have verified the correct locale.
   watch(language, () => {
-    i18n.locale.value = language.value || 'en'
-    if (isLocaleSynced) {
-      void setLocale(language.value || 'en')
-    }
+    if (language.value !== 'vi')
+      language.value = 'vi'
+
+    i18n.locale.value = 'vi'
+    localStorage.setItem('settings/language', 'vi')
+    if (isLocaleSynced)
+      void setLocale('vi')
   })
 
   async function restore() {
-    // Only trust main-process locale when renderer has lost its own setting.
-    // When main returns undefined, no language has ever been explicitly saved
-    // (true first launch), so we keep the renderer's OS-detected fallback.
-    // When main returns a string, that is the user's explicit choice.
-    if (!hasPersistedLanguage) {
-      try {
-        const mainLocale = await getMainLocale()
-        if (typeof mainLocale === 'string' && mainLocale && mainLocale !== language.value) {
-          language.value = mainLocale
-        }
-      }
-      catch (error) {
-        console.warn('[useLanguage] Failed to get locale from main process, using fallback:', error)
-      }
-    }
+    language.value = 'vi'
+    i18n.locale.value = 'vi'
+    localStorage.setItem('settings/language', 'vi')
     isLocaleSynced = true
-    void setLocale(language.value || 'en')
+    void setLocale('vi')
   }
 
   return { restore }

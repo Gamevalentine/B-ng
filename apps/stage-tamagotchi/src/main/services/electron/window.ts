@@ -14,6 +14,7 @@ import {
   electronWindowClose,
   electronWindowLifecycleChanged,
   electronWindowSetAlwaysOnTop,
+  electronWindowSetVisible,
 } from '../../../shared/eventa'
 import { onAppBeforeQuit, onAppWindowAllClosed } from '../../libs/bootkit/lifecycle'
 import { resizeWindowByDelta, setWindowAlwaysOnTop } from '../../windows/shared/window'
@@ -40,8 +41,13 @@ export function createWindowService(params: { context: ReturnType<typeof createC
     },
   })
 
-  onAppWindowAllClosed(() => stop())
-  onAppBeforeQuit(() => stop())
+  // The loop stops with its window; these cover the app closing first.
+  const offAllClosed = onAppWindowAllClosed(() => stop())
+  const offBeforeQuit = onAppBeforeQuit(() => stop())
+  params.window.once('closed', () => {
+    offAllClosed()
+    offBeforeQuit()
+  })
   defineInvokeHandler(params.context, startLoopGetBounds, () => start())
   defineInvokeHandler(params.context, electronGetWindowLifecycleState, (_, options) => {
     if (params.window.webContents.id === options?.raw.ipcMainEvent.sender.id)
@@ -84,6 +90,27 @@ export function createWindowService(params: { context: ReturnType<typeof createC
     if (params.window.webContents.id === options?.raw.ipcMainEvent.sender.id) {
       setWindowAlwaysOnTop(params.window, Boolean(flag))
     }
+  })
+
+  defineInvokeHandler(params.context, electronWindowSetVisible, (payload, options) => {
+    if (!payload || params.window.webContents.id !== options?.raw.ipcMainEvent.sender.id)
+      return
+
+    if (!payload.visible) {
+      params.window.hide()
+      return
+    }
+
+    if (params.window.isMinimized())
+      params.window.restore()
+
+    if (payload.focus) {
+      params.window.show()
+      params.window.focus()
+      return
+    }
+
+    params.window.showInactive()
   })
 
   defineInvokeHandler(params.context, electron.window.setVibrancy, (vibrancy, options) => {

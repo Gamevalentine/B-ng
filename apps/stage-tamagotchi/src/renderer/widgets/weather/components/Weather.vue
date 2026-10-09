@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 
 import Skeleton from './Skeleton.vue'
+import { vietnameseWeatherCity, vietnameseWeatherCondition } from './weather-vi'
 
 type WeatherEffect = 'rain' | 'snow' | 'thunder' | 'fog' | 'cloudy' | 'none'
 type SizePreset = 's' | 'm' | 'l' | { cols?: number, rows?: number }
@@ -183,10 +184,10 @@ const resolvedIconClass = computed(() => weatherIconMap[resolvedIconKey.value].i
             {{ props.temperature ?? '--' }}
           </div>
           <div :class="['text-lg', 'text-white/85']">
-            {{ props.condition ?? '—' }}
+            {{ vietnameseWeatherCondition(props.condition) }}
           </div>
           <div :class="['text-sm', 'text-white/55']">
-            {{ props.city ?? 'Unknown' }}
+            {{ vietnameseWeatherCity(props.city) }}
           </div>
         </div>
         <div :class="['h-px', 'w-full', 'bg-white/10']" />
@@ -197,7 +198,7 @@ const resolvedIconClass = computed(() => weatherIconMap[resolvedIconKey.value].i
               {{ props.wind ?? '--' }}
             </div>
             <div :class="['text-xs', 'text-white/60']">
-              Wind
+              Gió
             </div>
           </div>
           <div :class="['flex', 'flex-col', 'items-center', 'gap-1']">
@@ -206,7 +207,7 @@ const resolvedIconClass = computed(() => weatherIconMap[resolvedIconKey.value].i
               {{ props.precipitation ?? '--' }}
             </div>
             <div :class="['text-xs', 'text-white/60']">
-              Chance of rain
+              Lượng mưa
             </div>
           </div>
           <div :class="['flex', 'flex-col', 'items-center', 'gap-1']">
@@ -215,13 +216,13 @@ const resolvedIconClass = computed(() => weatherIconMap[resolvedIconKey.value].i
               {{ props.humidity ?? '--' }}
             </div>
             <div :class="['text-xs', 'text-white/60']">
-              Humidity
+              Độ ẩm
             </div>
           </div>
         </div>
       </div>
       <div v-else :class="['relative', 'z-1', 'flex', 'flex-1', 'flex-col', 'gap-3']">
-        <div :class="['flex', 'items-start', 'justify-between', 'gap-4', 'flex-1', 'p-2']">
+        <div :class="['flex', 'items-start', 'justify-between', 'gap-4', 'flex-1', 'px-2', 'pt-7', 'pb-2']">
           <div
             aria-hidden="true"
             :class="[
@@ -234,13 +235,13 @@ const resolvedIconClass = computed(() => weatherIconMap[resolvedIconKey.value].i
           />
           <div :class="['flex', 'flex-col', 'items-end', 'gap-2']">
             <div :class="['text-sm', 'tracking-wide', 'text-white/80']">
-              {{ props.condition ?? '—' }}
+              {{ vietnameseWeatherCondition(props.condition) }}
             </div>
             <div :class="['text-[3.5rem]', 'font-semibold', 'leading-none']">
               {{ props.temperature ?? '--' }}
             </div>
             <div :class="['text-xs', 'text-white/60']">
-              {{ props.city ?? 'Unknown' }}
+              {{ vietnameseWeatherCity(props.city) }}
             </div>
           </div>
         </div>
@@ -252,7 +253,7 @@ const resolvedIconClass = computed(() => weatherIconMap[resolvedIconKey.value].i
               {{ props.wind ?? '--' }}
             </div>
             <div :class="['text-xs', 'text-white/60']">
-              Wind
+              Gió
             </div>
           </div>
           <div :class="['flex', 'flex-col', 'items-center', 'gap-1']">
@@ -261,7 +262,7 @@ const resolvedIconClass = computed(() => weatherIconMap[resolvedIconKey.value].i
               {{ props.precipitation ?? '--' }}
             </div>
             <div :class="['text-xs', 'text-white/60']">
-              Chance of rain
+              Lượng mưa
             </div>
           </div>
           <div :class="['flex', 'flex-col', 'items-center', 'gap-1']">
@@ -270,7 +271,7 @@ const resolvedIconClass = computed(() => weatherIconMap[resolvedIconKey.value].i
               {{ props.humidity ?? '--' }}
             </div>
             <div :class="['text-xs', 'text-white/60']">
-              Humidity
+              Độ ẩm
             </div>
           </div>
         </div>

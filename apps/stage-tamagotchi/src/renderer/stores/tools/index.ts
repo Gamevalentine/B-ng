@@ -1,6 +1,10 @@
 export {
   artistryToolReferences,
-  reminderToolReferences,
+  companionApprovalToolReferences,
+  companionIntegrationToolReferences,
+  companionTaskToolReferences,
+  companionWorkflowToolReferences,
+  computerUseToolReferences,
   useTamagotchiBuiltinToolsStore,
   widgetToolReferences,
 } from './built-in'

@@ -11,6 +11,12 @@
     ],
     "useDefineForClassFields": true,
     "paths": {
+      "@proj-airi/api-server/app-type": [
+        "../../server/apps/api/src/app-type.ts"
+      ],
+      "@proj-airi/auth-shared": [
+        "../../server/packages/auth-shared/src/index.ts"
+      ],
       "@proj-airi/stage-pages/*.vue": [
         "../../packages/stage-pages/src/*.vue"
       ],
@@ -39,8 +45,7 @@
       "vue-macros/macros-global",
       "electron-vite/node",
       "unplugin-info/client",
-      "@proj-airi/stage-shared/electron-renderer",
-      "@webgpu/types"
+      "@proj-airi/stage-shared/electron-renderer"
     ],
     "allowJs": true,
     "strict": true,
