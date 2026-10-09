@@ -1,0 +1,56 @@
+name: BONG source readiness
+
+on:
+  pull_request:
+    paths:
+      - 'apps/stage-tamagotchi/**'
+      - 'packages/stage-ui/**'
+      - 'packages/provider-inference/**'
+      - '.github/workflows/bong-source-readiness.yml'
+      - 'docs/bong/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit BONG source sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check expected BONG source without building AIRI as BONG
+        shell: bash
+        run: |
+          missing=0
+          {
+            echo '## BONG source readiness'
+            echo
+            echo 'This check reports source migration state. It does not certify the voice or Windows installer.'
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for file in \
+            'apps/stage-tamagotchi/src/main/services/electron/bong-zero-tts.ts' \
+            'apps/stage-tamagotchi/src/renderer/utils/bong-transcript.ts' \
+            'packages/provider-inference/src/providers/local/bong-zerotts/index.ts' \
+            'apps/stage-tamagotchi/build/bong-bundle-ready.json'
+          do
+            if test -f "$file"; then
+              echo "- [x] $file" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- [ ] $file **(not synced)**" >> "$GITHUB_STEP_SUMMARY"
+              missing=$((missing + 1))
+            fi
+          done
+
+          if test "$missing" -gt 0; then
+            echo >> "$GITHUB_STEP_SUMMARY"
+            echo "**NOT READY:** $missing expected files missing. Do not download a base AIRI build as BONG." >> "$GITHUB_STEP_SUMMARY"
+            echo "BONG migration not complete ($missing files missing)."
+          else
+            echo >> "$GITHUB_STEP_SUMMARY"
+            echo "**Source paths present.** Inspect the complete code diff and verify offline voice packaging before attempting a Windows release." >> "$GITHUB_STEP_SUMMARY"
+          fi
