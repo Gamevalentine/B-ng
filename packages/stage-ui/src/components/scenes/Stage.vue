@@ -13,7 +13,7 @@ import { defineInvokeHandler } from '@moeru/eventa'
 import { sleep } from '@moeru/std'
 import { createLive2DLipSync } from '@proj-airi/model-driver-lipsync'
 import { wlipsyncProfile } from '@proj-airi/model-driver-lipsync/shared/wlipsync'
-import { createPlaybackManager, createSpeechPipeline, normalizeActPayload } from '@proj-airi/pipelines-audio'
+import { createPlaybackManager, createSpeechPipeline, createTtsSegmentStream, normalizeActPayload } from '@proj-airi/pipelines-audio'
 import { defaultLive2DMotionControlDynamics, Live2DScene, useLive2DMotionControl, useLive2dParams, useSettingsLive2d } from '@proj-airi/stage-ui-live2d'
 import { MMDScene } from '@proj-airi/stage-ui-mmd'
 import { SpineScene } from '@proj-airi/stage-ui-spine'
@@ -573,6 +573,15 @@ const speechPipeline = createSpeechPipeline<AudioBuffer>({
     }
   },
   playback: playbackManager,
+  // Port of the last non-buffering BÔNG Stage setting. Do not reintroduce
+  // the old async phrase buffer that delayed speech indefinitely.
+  segmenter: (tokens, meta) => createTtsSegmentStream(
+    tokens,
+    meta,
+    activeSpeechProvider.value === 'bong-zerotts-local'
+      ? { boost: 0, minimumWords: 12, maximumWords: 36 }
+      : undefined,
+  ),
 })
 
 initIOTracer()
