@@ -37,7 +37,6 @@ export const providerBongZeroTts = defineProvider({
       contextLength: 0,
       deprecated: false,
     }],
-    voiceCatalogConfig: () => ({}),
     listVoices: async () => [{
       id: 'vi-VN-maichi',
       name: 'Mai Chi – Nữ trẻ',

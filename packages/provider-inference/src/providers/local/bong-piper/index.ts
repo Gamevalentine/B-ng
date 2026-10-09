@@ -33,7 +33,6 @@ export const providerBongPiper = defineProvider({
       contextLength: 0,
       deprecated: false,
     }],
-    voiceCatalogConfig: () => ({}),
     listVoices: async () => [{
       id: 'vi-VN-vais1000-medium',
       name: 'VAIS1000 – nữ',
