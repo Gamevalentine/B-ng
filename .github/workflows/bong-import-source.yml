@@ -101,5 +101,5 @@ jobs:
             echo "## BÔNG source import staged"
             echo "418 inspected source files were imported into the DRAFT PR branch only."
             echo "No release was published, no Windows installer built, and no Gemini credentials were included."
-            echo "Further `packages/stage-ui`, `provider-inference` and `pipelines-audio` migration is still required."
+            echo 'Further packages/stage-ui, packages/provider-inference and packages/pipelines-audio migration is still required.'
           } >> "$GITHUB_STEP_SUMMARY"
