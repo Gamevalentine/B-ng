@@ -10,6 +10,8 @@ on:
       - 'packages/pipelines-audio/**'
       - 'tools/bong-tts/**'
       - 'apps/stage-tamagotchi/**'
+      - 'pnpm-workspace.yaml'
+      - 'pnpm-lock.yaml'
       - '.github/workflows/bong-library-compatibility.yml'
   workflow_dispatch:
 
