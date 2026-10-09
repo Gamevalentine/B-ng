@@ -50,6 +50,7 @@ jobs:
             echo >> "$GITHUB_STEP_SUMMARY"
             echo "**NOT READY:** $missing expected files missing. Do not download a base AIRI build as BONG." >> "$GITHUB_STEP_SUMMARY"
             echo "BONG migration not complete ($missing files missing)."
+            exit 1
           else
             echo >> "$GITHUB_STEP_SUMMARY"
             echo "**Source paths present.** Inspect the complete code diff and verify offline voice packaging before attempting a Windows release." >> "$GITHUB_STEP_SUMMARY"
