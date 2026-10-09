@@ -303,6 +303,16 @@ export interface ProviderDefinition<TConfig = Record<string, unknown>, TId exten
   }
 }
 
+/** A complete transcript snapshot that replaces earlier volatile text. */
+export interface StreamTranscriptionSnapshot {
+  durationMilliseconds: number
+  isFinal: boolean
+  locale: string
+  startMilliseconds: number
+  text: string
+  type: 'transcript.text.snapshot'
+}
+
 /** Reasoning modes that AIRI can request from a chat provider. */
 export type ChatReasoningMode = 'disabled' | 'enabled'
 
