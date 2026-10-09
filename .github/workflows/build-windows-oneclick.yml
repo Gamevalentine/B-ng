@@ -1,17 +1,10 @@
-name: Build AIRI Windows One-Click
+name: BONG Windows Preview (manual only)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/build-windows-oneclick.yml'
-      - 'apps/stage-tamagotchi/**'
-      - 'packages/stage-ui/**'
-      - 'engines/stage-tamagotchi-godot/**'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-windows:
@@ -24,6 +17,27 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Verify BONG source and model packaging before build
+        shell: pwsh
+        run: |
+          $expected = @(
+            'apps/stage-tamagotchi/src/main/services/electron/bong-zero-tts.ts'
+            'apps/stage-tamagotchi/src/renderer/utils/bong-transcript.ts'
+            'packages/provider-inference/src/providers/local/bong-zerotts/index.ts'
+            'apps/stage-tamagotchi/build/bong-bundle-ready.json'
+          )
+          $missing = @($expected | Where-Object { -not (Test-Path -LiteralPath $_) })
+          if ($missing.Count -gt 0) {
+            throw "BONG local source has NOT been migrated to GitHub. Missing: $($missing -join ', '). Do not package AIRI as BONG."
+          }
+          $ready = Get-Content 'apps/stage-tamagotchi/build/bong-bundle-ready.json' -Raw | ConvertFrom-Json
+          if ($ready.windowsRuntimeBundled -ne $true -or
+              $ready.maiChiModelHandled -ne $true -or
+              $ready.sherpaModelHandled -ne $true) {
+            throw 'BONG runtime packaging not confirmed. This workflow must not create an installer yet.'
+          }
+          "BONG source readiness and runtime packaging gates passed." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
       - name: Setup pnpm + Node
         uses: pnpm/setup@v2
@@ -70,31 +84,7 @@ jobs:
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: AIRI-Windows-x64-Setup
+          name: BONG-Windows-x64-PREVIEW
           path: apps/stage-tamagotchi/dist/*windows-x64-setup.exe
           if-no-files-found: error
           retention-days: 7
-
-      - name: Publish direct-download release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $installer = Get-ChildItem apps/stage-tamagotchi/dist -Filter '*windows-x64-setup.exe' -File | Select-Object -First 1
-          if (-not $installer) { throw 'Windows installer not found' }
-
-          $asset = Join-Path $PWD 'AIRI-Windows-x64-Setup.exe'
-          Copy-Item $installer.FullName $asset -Force
-
-          gh release view airi-custom-latest *> $null
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload airi-custom-latest $asset --clobber
-          }
-          else {
-            gh release create airi-custom-latest $asset `
-              --title 'AIRI Custom Windows x64' `
-              --notes 'One-click Windows x64 build from Gamevalentine/B-ng. Built automatically by GitHub Actions.'
-          }
-
-          if ($LASTEXITCODE -ne 0) { throw 'Failed to publish AIRI Windows release' }
-          Write-Host "Direct download: https://github.com/$env:GITHUB_REPOSITORY/releases/download/airi-custom-latest/AIRI-Windows-x64-Setup.exe"
