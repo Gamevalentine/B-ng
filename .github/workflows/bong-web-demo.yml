@@ -1,0 +1,42 @@
+name: BONG web demo build (manual)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [bong-web-demo]
+    paths:
+      - 'apps/stage-web/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'package.json'
+      - '.github/workflows/bong-web-demo.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build web and dependent packages
+        run: pnpm run build:web
+      - name: Archive web preview files (not a public deployment)
+        uses: actions/upload-artifact@v4
+        with:
+          name: bong-web-demo-dist
+          path: apps/stage-web/dist/
+          if-no-files-found: error
+          retention-days: 7
