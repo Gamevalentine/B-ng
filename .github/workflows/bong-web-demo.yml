@@ -68,7 +68,7 @@ jobs:
             grep -Ei '(ERROR|failed|exceeded)' "$output" | sed -E 's@https?://[^[:space:]]+@[redacted-url]@g' | head -n 8 || true
             exit 1
           fi
-          url="$(grep -Eo 'https://[A-Za-z0-9.-]+\\.workers\\.dev' "$output" | tail -n 1 || true)"
+          url="$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' "$output" | tail -n 1 || true)"
           if [[ -z "$url" ]]; then
             echo "::error::Temporary preview returned no verified workers.dev URL."
             exit 1
