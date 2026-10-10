@@ -1,0 +1,105 @@
+name: BONG import reviewed source ZIP
+
+on:
+  push:
+    branches:
+      - bong/github-actions-migration-20261009
+    paths:
+      - bong-import/BONG_stage_tamagotchi_GitHub_SAFE.zip
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bong-import-source
+  cancel-in-progress: false
+
+jobs:
+  import:
+    name: Import reviewed source without installation or build
+    if: github.repository == 'Gamevalentine/B-ng' && github.ref == 'refs/heads/bong/github-actions-migration-20261009'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout only the migration branch
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: true
+
+      - name: Verify archive identity and safe file paths, then stage source
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, pathlib, stat, sys, zipfile
+
+          archive = pathlib.Path("bong-import/BONG_stage_tamagotchi_GitHub_SAFE.zip")
+          if not archive.is_file():
+              raise SystemExit("Expected reviewed BONG source ZIP is missing")
+          payload = archive.read_bytes()
+          if len(payload) > 10 * 1024 * 1024:
+              raise SystemExit("Archive is unexpectedly large")
+          expected = "7e19dab2473dc397f9b0e1892f3d3a83d0545f481f7236db6ca9c354bf4e8e22"
+          actual = hashlib.sha256(payload).hexdigest()
+          if actual != expected:
+              raise SystemExit("Archive SHA-256 does not match the reviewed source ZIP; refusing import")
+
+          allow_configs = {
+              "package.json", "electron.vite.config.ts",
+              "electron-builder.config.ts", "tsconfig.json",
+          }
+          prefix = "apps/stage-tamagotchi/"
+          accepted = []
+          with zipfile.ZipFile(archive) as bundle:
+              for record in bundle.infolist():
+                  name = record.filename
+                  if name == "BONG_IMPORT_INFO.json":
+                      continue
+                  if record.is_dir():
+                      continue
+                  if not name.startswith(prefix) or "\\" in name:
+                      raise SystemExit("Unexpected ZIP path: " + name)
+                  rel = name[len(prefix):]
+                  parts = pathlib.PurePosixPath(rel).parts
+                  if any(part in ("", ".", "..") or part.startswith(".") for part in parts):
+                      raise SystemExit("Unsafe path component: " + name)
+                  if not (rel.startswith("src/") or rel in allow_configs):
+                      raise SystemExit("Outside approved source scope: " + name)
+                  if "node_modules" in parts or "out" in parts or ".cache" in parts:
+                      raise SystemExit("Runtime/cache files are not allowed: " + name)
+                  if record.file_size > 2_000_000:
+                      raise SystemExit("Unexpectedly large file: " + name)
+                  if stat.S_ISLNK(record.external_attr >> 16):
+                      raise SystemExit("Symlink entries are forbidden: " + name)
+                  accepted.append(record)
+              if len(accepted) != 418:
+                  raise SystemExit(f"Expected 418 source files, got {len(accepted)}")
+              if sum(item.file_size for item in accepted) > 10_000_000:
+                  raise SystemExit("Uncompressed source limit exceeded")
+              for record in accepted:
+                  dst = pathlib.Path(record.filename)
+                  if any(parent.is_symlink() for parent in (dst, *dst.parents)):
+                      raise SystemExit("Refusing to replace a symlink: " + str(dst))
+                  dst.parent.mkdir(parents=True, exist_ok=True)
+                  dst.write_bytes(bundle.read(record))
+              print(f"Imported {len(accepted)} reviewed source files; no program code executed.")
+          PY
+
+      - name: Commit source changes to draft PR branch only
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- apps/stage-tamagotchi
+          git rm --quiet --force -- bong-import/BONG_stage_tamagotchi_GitHub_SAFE.zip
+          if git diff --cached --quiet; then
+            echo "Nothing changed after staging the reviewed BONG source" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git commit -m "chore(bong): stage reviewed Windows app source for draft PR"
+          git push origin HEAD:bong/github-actions-migration-20261009
+          {
+            echo "## BÔNG source import staged"
+            echo "418 inspected source files were imported into the DRAFT PR branch only."
+            echo "No release was published, no Windows installer built, and no Gemini credentials were included."
+            echo 'Further packages/stage-ui, packages/provider-inference and packages/pipelines-audio migration is still required.'
+          } >> "$GITHUB_STEP_SUMMARY"

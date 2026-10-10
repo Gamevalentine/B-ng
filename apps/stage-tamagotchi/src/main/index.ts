@@ -1,24 +1,24 @@
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, MenuItemConstructorOptions } from 'electron'
 
 import type { FileLoggerHandle } from './app/file-logger'
 
 import process, { env, platform } from 'node:process'
 
-import { dirname } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import messages from '@proj-airi/i18n/locales'
 
-import { electronApp, optimizer } from '@electron-toolkit/utils'
+import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { Format, LogLevel, setGlobalFormat, setGlobalHookPostLog, setGlobalLogLevel, useLogg } from '@guiiai/logg'
 import { createContext } from '@moeru/eventa/adapters/electron/main'
 import { hasSelectedScreenCaptureSource, initScreenCaptureForMain } from '@proj-airi/electron-screen-capture/main'
-import { app, ipcMain, session } from 'electron'
+import { app, ipcMain, Menu, protocol, session } from 'electron'
 import { noop } from 'es-toolkit'
 import { createLoggLogger, injeca, lifecycle } from 'injeca'
 import { isLinux } from 'std-env'
 
-import icon from '../../resources/icon.png?asset'
+import devIcon from '../../resources/icon.png?asset'
 
 import { openDebugger, setupDebugger } from './app/debugger'
 import { nullFileLoggerHandle, setupFileLogger } from './app/file-logger'
@@ -26,11 +26,13 @@ import { resolveIsWayland } from './app/ozone'
 import { installSingleInstanceGuard } from './app/single-instance'
 import { createArtistryConfig } from './configs/artistry'
 import { createGlobalAppConfig } from './configs/global'
-import { emitAppBeforeQuit, emitAppReady, emitAppWindowAllClosed } from './libs/bootkit/lifecycle'
-import { setElectronMainDirname } from './libs/electron/location'
+import { emitAppBeforeQuit, emitAppWindowAllClosed } from './libs/bootkit/lifecycle'
+import { getElectronMainDirname, setElectronMainDirname } from './libs/electron/location'
 import { createI18n } from './libs/i18n'
 import { setupAppleSpeechTranscriptionService } from './services/airi/apple-speech-transcription'
+import { setupAppleVisionService } from './services/airi/apple-vision'
 import { setupServerChannel } from './services/airi/channel-server'
+import { setupComputerUse } from './services/airi/computer-use'
 import { setupGodotStageManager } from './services/airi/godot-stage'
 import { setupBuiltInServer } from './services/airi/http-server'
 import { setupMcpStdioManager } from './services/airi/mcp-servers'
@@ -38,15 +40,18 @@ import { setupExtensionHost } from './services/airi/plugins'
 import { setupArtistryBridge } from './services/airi/widgets/artistry-bridge'
 import { setupAutoUpdater } from './services/electron/auto-updater'
 import { setupGlobalShortcutService } from './services/electron/global-shortcut'
+import { setupBongPiperTtsProtocol } from './services/electron/bong-piper-tts'
 import { setupPermissionHandlers } from './services/electron/media-permissions'
+import { setupSherpawModelAssetsProtocol } from './services/electron/sherpaw-model-assets'
 import { setupTray } from './tray'
 import { setupAboutWindowReusable } from './windows/about'
 import { setupBeatSync } from './windows/beat-sync'
 import { setupCaptionWindowManager } from './windows/caption'
-import { setupChatWindowReusableFunc } from './windows/chat'
+import { setupChatWindowManager } from './windows/chat'
 import { isDesktopOverlayEnabled, setupDesktopOverlayWindow } from './windows/desktop-overlay'
 import { setupDevtoolsWindow } from './windows/devtools'
 import { setupEditorWindowManager } from './windows/editor'
+import { setupInlayWindowReusable } from './windows/inlay'
 import { setupMainWindow } from './windows/main'
 import { setupNoticeWindowManager } from './windows/notice'
 import { setupOnboardingWindowManager } from './windows/onboarding'
@@ -60,6 +65,10 @@ import { setupWidgetsWindowManager } from './windows/widgets'
 ipcMain.setMaxListeners(100)
 
 setElectronMainDirname(dirname(fileURLToPath(import.meta.url)))
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'airi-sherpaw', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
+  { scheme: 'airi-bong-tts', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
+])
 setGlobalFormat(Format.Pretty)
 setGlobalLogLevel(LogLevel.Log)
 setupDebugger()
@@ -129,12 +138,16 @@ if (isLinux) {
   app.commandLine.appendSwitch('enable-features', enabledFeatures.join(','))
 }
 
-app.dock?.setIcon(icon)
+// Packaged builds use the bundle icon (`build/icon.icon` or `build/icon.icns`).
+// Dev runs use the Electron default icon, so replace it with a marked dev icon.
+if (is.dev)
+  app.dock?.setIcon(devIcon)
 electronApp.setAppUserModelId('ai.moeru.airi')
 
 // Track the real user-facing AIRI window because the process also owns hidden utility windows.
 // The second-instance handler should restore the main UI instead of accidentally surfacing internals.
 let userFacingMainWindow: BrowserWindow | undefined
+let extensionManagementWebContentsId: number | undefined
 const shouldStartMainProcess = installSingleInstanceGuard({ app, getWindow: () => userFacingMainWindow })
 
 if (shouldStartMainProcess) {
@@ -144,11 +157,68 @@ if (shouldStartMainProcess) {
 let fileLogger: FileLoggerHandle = nullFileLoggerHandle
 let skipFileLogging = false
 
+function setupVietnameseApplicationMenu() {
+  const template: MenuItemConstructorOptions[] = [
+    {
+      label: 'Tệp',
+      submenu: [
+        { role: 'close', label: 'Đóng cửa sổ' },
+        { type: 'separator' },
+        { role: 'quit', label: 'Thoát BÔNG' },
+      ],
+    },
+    {
+      label: 'Chỉnh sửa',
+      submenu: [
+        { role: 'undo', label: 'Hoàn tác' },
+        { role: 'redo', label: 'Làm lại' },
+        { type: 'separator' },
+        { role: 'cut', label: 'Cắt' },
+        { role: 'copy', label: 'Sao chép' },
+        { role: 'paste', label: 'Dán' },
+        { role: 'selectAll', label: 'Chọn tất cả' },
+      ],
+    },
+    {
+      label: 'Xem',
+      submenu: [
+        { role: 'reload', label: 'Tải lại' },
+        { role: 'forceReload', label: 'Tải lại hoàn toàn' },
+        ...(is.dev ? [{ role: 'toggleDevTools' as const, label: 'Công cụ phát triển' }] : []),
+        { type: 'separator' },
+        { role: 'resetZoom', label: 'Kích thước mặc định' },
+        { role: 'zoomIn', label: 'Phóng to' },
+        { role: 'zoomOut', label: 'Thu nhỏ' },
+        { type: 'separator' },
+        { role: 'togglefullscreen', label: 'Toàn màn hình' },
+      ],
+    },
+    {
+      label: 'Cửa sổ',
+      submenu: [
+        { role: 'minimize', label: 'Thu nhỏ' },
+        { role: 'zoom', label: 'Phóng cửa sổ' },
+      ],
+    },
+    {
+      label: 'Trợ giúp',
+      submenu: [
+        { label: 'BÔNG · Trợ lý AI của riêng anh', enabled: false },
+      ],
+    },
+  ]
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
 app.whenReady().then(async () => {
   if (!shouldStartMainProcess) {
     return
   }
 
+  setupVietnameseApplicationMenu()
+  setupSherpawModelAssetsProtocol(resolve(getElectronMainDirname(), '..', 'renderer'))
+  setupBongPiperTtsProtocol()
   setupPermissionHandlers(session.defaultSession, hasSelectedScreenCaptureSource)
 
   // Initialize file logger and register the hook
@@ -172,9 +242,8 @@ app.whenReady().then(async () => {
       enabled: import.meta.env.VITE_DISTRIBUTION !== 'steam',
       getStoredUpdateLane: () => dependsOn.appConfig.get()?.updateChannel,
       setStoredUpdateLane: (lane) => {
-        const currentConfig = dependsOn.appConfig.get()
         dependsOn.appConfig.update({
-          language: currentConfig?.language ?? 'en',
+          language: 'vi',
           updateChannel: lane,
         })
       },
@@ -183,7 +252,8 @@ app.whenReady().then(async () => {
 
   const i18n = injeca.provide('libs:i18n', {
     dependsOn: { appConfig },
-    build: ({ dependsOn }) => createI18n({ messages, locale: dependsOn.appConfig.get()?.language }),
+    // Bản dựng cá nhân này dùng tiếng Việt làm ngôn ngữ cố định cho giao diện desktop.
+    build: () => createI18n({ messages, locale: 'vi', fallbackLocale: 'vi' }),
   })
 
   const serverChannel = injeca.provide('modules:channel-server', {
@@ -204,6 +274,11 @@ app.whenReady().then(async () => {
     build: ({ dependsOn }) => setupAppleSpeechTranscriptionService(dependsOn),
   })
 
+  const appleVision = injeca.provide('modules:apple-vision', {
+    dependsOn: { lifecycle },
+    build: ({ dependsOn }) => setupAppleVisionService(dependsOn),
+  })
+
   const mcpStdioManager = injeca.provide('modules:mcp-stdio-manager', {
     build: async () => setupMcpStdioManager(),
   })
@@ -215,7 +290,10 @@ app.whenReady().then(async () => {
 
   const pluginHost = injeca.provide('modules:plugin-host', {
     dependsOn: { serverChannel, widgetsManager },
-    build: ({ dependsOn }) => setupExtensionHost(dependsOn),
+    build: ({ dependsOn }) => setupExtensionHost({
+      ...dependsOn,
+      getExtensionManagementWebContentsId: () => extensionManagementWebContentsId,
+    }),
   })
 
   const globalShortcut = injeca.provide('services:global-shortcut', () => setupGlobalShortcutService())
@@ -239,10 +317,17 @@ app.whenReady().then(async () => {
     dependsOn: { autoUpdater, i18n, serverChannel },
     build: ({ dependsOn }) => setupAboutWindowReusable(dependsOn),
   })
+  const inlayWindow = injeca.provide('windows:inlay', {
+    dependsOn: { i18n, serverChannel },
+    build: ({ dependsOn }) => setupInlayWindowReusable(dependsOn),
+  })
 
   const chatWindow = injeca.provide('windows:chat', {
     dependsOn: { widgetsManager, serverChannel, mcpStdioManager, i18n },
-    build: ({ dependsOn }) => setupChatWindowReusableFunc(dependsOn),
+    build: ({ dependsOn }) => setupChatWindowManager({
+      ...dependsOn,
+      getMainWindow: () => userFacingMainWindow,
+    }),
   })
 
   const spotlightWindow = injeca.provide('windows:spotlight', {
@@ -261,11 +346,20 @@ app.whenReady().then(async () => {
       setupSettingsWindowReusableFunc({
         ...dependsOn,
         getMainWindow: () => userFacingMainWindow,
+        onWindowCreated: (window) => {
+          const webContentsId = window.webContents.id
+          extensionManagementWebContentsId = webContentsId
+          window.once('closed', () => {
+            if (extensionManagementWebContentsId === webContentsId) {
+              extensionManagementWebContentsId = undefined
+            }
+          })
+        },
       }),
   })
 
   const mainWindow = injeca.provide('windows:main', {
-    dependsOn: { editorWindow, settingsWindow, chatWindow, widgetsManager, noticeWindow, beatSync, autoUpdater, serverChannel, godotStageManager, mcpStdioManager, i18n, onboardingWindowManager, appleSpeechTranscription },
+    dependsOn: { editorWindow, settingsWindow, chatWindow, widgetsManager, noticeWindow, beatSync, autoUpdater, serverChannel, godotStageManager, mcpStdioManager, i18n, onboardingWindowManager, appleSpeechTranscription, appleVision },
     build: async ({ dependsOn }) => setupMainWindow({
       ...dependsOn,
       onWindowCreated: (window) => {
@@ -280,7 +374,7 @@ app.whenReady().then(async () => {
   })
 
   const tray = injeca.provide('app:tray', {
-    dependsOn: { mainWindow, settingsWindow, captionWindow, widgetsWindow: widgetsManager, serverChannel, beatSyncBgWindow: beatSync, aboutWindow, i18n },
+    dependsOn: { mainWindow, settingsWindow, captionWindow, widgetsWindow: widgetsManager, serverChannel, beatSyncBgWindow: beatSync, aboutWindow, inlayWindow, i18n, appConfig },
     build: async ({ dependsOn }) => setupTray(dependsOn),
   })
 
@@ -304,6 +398,7 @@ app.whenReady().then(async () => {
     dependsOn: { mainWindow, tray, serverChannel, airiHttpServer, godotStageManager, pluginHost, mcpStdioManager, onboardingWindow: onboardingWindowManager, widgetsWindow: widgetsManager, spotlightWindow, artistryConfig },
     callback: async (deps) => {
       const { context } = createContext(ipcMain)
+      setupComputerUse(context)
       await setupArtistryBridge({
         widgetsManager: deps.widgetsWindow,
         context,
@@ -313,9 +408,6 @@ app.whenReady().then(async () => {
   })
 
   injeca.start().catch(err => console.error(err))
-
-  // Lifecycle
-  emitAppReady()
 
   // Extra
   openDebugger()

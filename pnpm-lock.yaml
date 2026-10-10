@@ -24,6 +24,12 @@ catalogs:
     '@arethetypeswrong/core':
       specifier: ^0.18.5
       version: 0.18.5
+    '@auv-js/cli':
+      specifier: 0.0.28
+      version: 0.0.28
+    '@auv-js/sdk':
+      specifier: 0.0.28
+      version: 0.0.28
     '@ax-llm/ax':
       specifier: ^24.0.5
       version: 24.0.5
@@ -264,6 +270,9 @@ catalogs:
     '@nekopaw/tempora':
       specifier: 0.4.0-alpha.1
       version: 0.4.0-alpha.1
+    '@openpanel/web':
+      specifier: 1.4.1
+      version: 1.4.1
     '@opentelemetry/api':
       specifier: ^1.9.1
       version: 1.9.1
@@ -411,6 +420,9 @@ catalogs:
     '@rive-app/canvas-lite':
       specifier: ^2.40.1
       version: 2.40.1
+    '@sherpaw/xsai-transcription':
+      specifier: 0.2.1
+      version: 0.2.1
     '@shikijs/markdown-it':
       specifier: ^4.4.3
       version: 4.4.3
@@ -567,6 +579,15 @@ catalogs:
     '@xsai-apple-speech/transcription-native-darwin-x64':
       specifier: 0.1.3
       version: 0.1.3
+    '@xsai-apple-vision/vision-electron-plugin':
+      specifier: 0.1.0
+      version: 0.1.0
+    '@xsai-apple-vision/vision-native':
+      specifier: 0.1.0
+      version: 0.1.0
+    '@xsai-apple-vision/vision-native-darwin-arm64':
+      specifier: 0.1.0
+      version: 0.1.0
     '@xsai-ext/providers':
       specifier: 0.5.0
       version: 0.5.0
@@ -1844,6 +1865,12 @@ importers:
 
   apps/stage-tamagotchi:
     dependencies:
+      '@auv-js/cli':
+        specifier: 'catalog:'
+        version: 0.0.28
+      '@auv-js/sdk':
+        specifier: 'catalog:'
+        version: 0.0.28
       '@date-fns/utc':
         specifier: 'catalog:'
         version: 2.1.1
@@ -1934,6 +1961,9 @@ importers:
       '@proj-airi/plugin-sdk-tamagotchi':
         specifier: workspace:^
         version: link:../../packages/plugin-sdk-tamagotchi
+      '@proj-airi/provider-inference':
+        specifier: workspace:^
+        version: link:../../packages/provider-inference
       '@proj-airi/server-sdk':
         specifier: workspace:*
         version: link:../../packages/server-sdk
@@ -1991,6 +2021,12 @@ importers:
       '@xsai-apple-speech/transcription-native':
         specifier: 'catalog:'
         version: 0.1.3(@xsai/generate-transcription@0.5.0)
+      '@xsai-apple-vision/vision-electron-plugin':
+        specifier: 'catalog:'
+        version: 0.1.0(electron@43.4.1(supports-color@10.2.2))(h3@2.0.1-rc.29(crossws@0.4.12(srvx@0.12.7)))(hono@4.13.3)
+      '@xsai-apple-vision/vision-native':
+        specifier: 'catalog:'
+        version: 0.1.0
       '@xsai-ext/providers':
         specifier: 'catalog:'
         version: 0.5.0
@@ -2093,9 +2129,6 @@ importers:
       popmotion:
         specifier: 'catalog:'
         version: 11.0.5
-      posthog-js:
-        specifier: 'catalog:'
-        version: 1.306.1
       rehype-stringify:
         specifier: 'catalog:'
         version: 10.0.1
@@ -2256,6 +2289,9 @@ importers:
       '@proj-airi/unplugin-live2d-sdk':
         specifier: 'catalog:'
         version: 0.1.7(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.0(supports-color@10.2.2))(terser@5.50.0)(tsx@4.23.12)(yaml@2.9.0)
+      '@proj-airi/vite-plugin-sherpaw':
+        specifier: workspace:^
+        version: link:../../packages/vite-plugin-sherpaw
       '@types/audioworklet':
         specifier: 'catalog:'
         version: 0.0.100
@@ -2286,9 +2322,6 @@ importers:
       '@vue-macros/volar':
         specifier: 'catalog:'
         version: 3.1.4(typescript@6.0.3)(vue-tsc@3.3.11(typescript@6.0.3))(vue@3.5.41(typescript@6.0.3))
-      '@webgpu/types':
-        specifier: 'catalog:'
-        version: 0.1.72
       builder-util-runtime:
         specifier: 'catalog:'
         version: 9.7.0(supports-color@10.2.2)
@@ -2377,6 +2410,9 @@ importers:
       '@xsai-apple-speech/transcription-native-darwin-x64':
         specifier: 'catalog:'
         version: 0.1.3
+      '@xsai-apple-vision/vision-native-darwin-arm64':
+        specifier: 'catalog:'
+        version: 0.1.0
 
   apps/stage-web:
     dependencies:
@@ -3870,10 +3906,16 @@ importers:
       nanoid:
         specifier: 'catalog:'
         version: 6.0.1
+      semver:
+        specifier: 'catalog:'
+        version: 7.8.5
       valibot:
         specifier: 'catalog:'
         version: 1.4.2(typescript@6.0.3)
     devDependencies:
+      '@types/semver':
+        specifier: 'catalog:'
+        version: 7.8.0
       es-toolkit:
         specifier: 'catalog:'
         version: 1.51.0
@@ -3904,6 +3946,12 @@ importers:
       '@proj-airi/audio':
         specifier: workspace:^
         version: link:../audio
+      '@sherpaw/asr':
+        specifier: 0.2.1
+        version: 0.2.1(onnxruntime-web@1.27.0)
+      '@sherpaw/xsai-transcription':
+        specifier: 'catalog:'
+        version: 0.2.1(electron@43.4.1(supports-color@10.2.2))(onnxruntime-web@1.27.0)
       '@xsai-ext/providers':
         specifier: 'catalog:'
         version: 0.5.0
@@ -4395,6 +4443,9 @@ importers:
       '@moeru/std':
         specifier: 'catalog:'
         version: 0.1.0-beta.17
+      '@openpanel/web':
+        specifier: 'catalog:'
+        version: 1.4.1
       '@opentelemetry/api':
         specifier: 'catalog:'
         version: 1.9.1
@@ -4482,9 +4533,15 @@ importers:
       '@proj-airi/ui':
         specifier: workspace:^
         version: link:../ui
+      '@proj-airi/vite-plugin-sherpaw':
+        specifier: workspace:^
+        version: link:../vite-plugin-sherpaw
       '@ricky0123/vad-web':
         specifier: 'catalog:'
         version: 0.0.30
+      '@sherpaw/xsai-transcription':
+        specifier: 'catalog:'
+        version: 0.2.1(electron@43.4.1(supports-color@10.2.2))(onnxruntime-web@1.27.0)
       '@shikijs/rehype':
         specifier: 'catalog:'
         version: 4.4.3
@@ -4855,6 +4912,9 @@ importers:
       '@lemonneko/crop-empty-pixels':
         specifier: 'catalog:'
         version: 0.1.1
+      '@moeru/std':
+        specifier: 'catalog:'
+        version: 0.1.0-beta.17
       '@pixi/app':
         specifier: 'catalog:'
         version: 6.5.10(@pixi/core@6.5.10(@pixi/constants@6.5.10)(@pixi/extensions@6.5.10)(@pixi/math@6.5.10)(@pixi/runner@6.5.10)(@pixi/settings@6.5.10(@pixi/constants@6.5.10))(@pixi/ticker@6.5.10(@pixi/extensions@6.5.10)(@pixi/settings@6.5.10(@pixi/constants@6.5.10)))(@pixi/utils@6.5.10(@pixi/constants@6.5.10)(@pixi/settings@6.5.10(@pixi/constants@6.5.10))))(@pixi/display@6.5.10(@pixi/constants@6.5.10)(@pixi/math@6.5.10)(@pixi/settings@6.5.10(@pixi/constants@6.5.10))(@pixi/utils@6.5.10(@pixi/constants@6.5.10)(@pixi/settings@6.5.10(@pixi/constants@6.5.10))))(@pixi/math@6.5.10)(@pixi/utils@6.5.10(@pixi/constants@6.5.10)(@pixi/settings@6.5.10(@pixi/constants@6.5.10)))
@@ -5334,6 +5394,34 @@ importers:
       '@unocss/preset-web-fonts':
         specifier: '>=66'
         version: 66.8.1
+
+  packages/vite-plugin-sherpaw:
+    dependencies:
+      '@proj-airi/provider-inference':
+        specifier: workspace:^
+        version: link:../provider-inference
+      '@proj-airi/unplugin-fetch':
+        specifier: 'catalog:'
+        version: 0.2.3(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.0(supports-color@10.2.2))(terser@5.50.0)(tsx@4.23.12)(yaml@2.9.0))
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.2.0
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(@arethetypeswrong/core@0.18.5)(@volar/typescript@2.4.28(typescript@6.0.3))(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.12)(typescript@6.0.3)(unplugin-unused@0.6.0(esbuild@0.28.2)(rolldown@1.2.5)(rollup@4.62.5)(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.0(supports-color@10.2.2))(terser@5.50.0)(tsx@4.23.12)(yaml@2.9.0)))(vue-tsc@3.3.11(typescript@6.0.3))
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      unplugin-basemove:
+        specifier: 'catalog:'
+        version: 0.0.1(esbuild@0.28.2)(rolldown@1.2.5)(rollup@4.62.5)(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.0(supports-color@10.2.2))(terser@5.50.0)(tsx@4.23.12)(yaml@2.9.0))
+      vite:
+        specifier: 'catalog:'
+        version: 8.2.2(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.0(supports-color@10.2.2))(terser@5.50.0)(tsx@4.23.12)(yaml@2.9.0)
+      vitest:
+        specifier: catalog:vitest
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/browser-playwright@4.1.11)(@vitest/coverage-v8@4.1.11)(jsdom@30.0.1(@noble/hashes@2.3.0)(canvas@3.2.3))(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.0(supports-color@10.2.2))(terser@5.50.0)(tsx@4.23.12)(yaml@2.9.0))
 
   packages/vitest-plugin-fakemic:
     dependencies:
@@ -6072,6 +6160,54 @@ packages:
 
   '@asamuzakjp/nwsapi@2.3.9':
     resolution: {integrity: sha512-n8GuYSrI9bF7FFZ/SjhwevlHc8xaVlb/7HmHelnc/PZXBD2ZR49NnN9sMMuDdEGPeeRQ5d0hqlSlEpgCX3Wl0Q==}
+
+  '@auv-js/api-client@0.0.28':
+    resolution: {integrity: sha512-dM/41Bymh9AeK+ePORUF+IJ9d1U2eguOO1ywyFYmAsDdLZqm2/C6mAkiqNFXj3UKYuNo2eL8z+pQNrmS3BSoFg==}
+
+  '@auv-js/cli-darwin-arm64@0.0.28':
+    resolution: {integrity: sha512-mgwnJuzHeAX3KfQSrcR0sniZBCRmXU/FSoBH6dF5jTm+uzeRY37EPJY7YwxvZXsS6TAHLDIjA9JpAzKN1HzRKQ==}
+    engines: {node: '>=20.19.0'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@auv-js/cli-darwin-x64@0.0.28':
+    resolution: {integrity: sha512-3ZSziSCV2AZF/F1hUauu7fYVlChQ96+4oHgp/fv7OZobAq+/EiAQqyrbatvYE4O27NcjamiNDdMq6SBdcJCvOw==}
+    engines: {node: '>=20.19.0'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@auv-js/cli-linux-arm64-gnu@0.0.28':
+    resolution: {integrity: sha512-x4WVMjqysLyqFZlBfSQI7d5pWBeiY48twodcYaBa49c8xagzfSs1adrJfXqYDW6hptPhtooKRsdFU3HbLsrkgQ==}
+    engines: {node: '>=20.19.0'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@auv-js/cli-linux-x64-gnu@0.0.28':
+    resolution: {integrity: sha512-rvKrKQ+C/K/JetZef8WroXsC3ZZThv96Szjye/w15+vvJVPujNOcoGeiRc112MrJ6PktKsxbJQXC+B4krZkFWQ==}
+    engines: {node: '>=20.19.0'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@auv-js/cli-win32-arm64-msvc@0.0.28':
+    resolution: {integrity: sha512-R9Nu9TUT2heshiDWbaDOZiuXs/H4yd0RQdatuX/uKSsTnEhgPfKmdYj7hpGqtJf6b52pENbdvUs8ZlOyV5rRJQ==}
+    engines: {node: '>=20.19.0'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@auv-js/cli-win32-x64-msvc@0.0.28':
+    resolution: {integrity: sha512-AwVXaJBqfqidq8VWdQNXfmvkhXDKu4ZwmljBG4y4KxD74zHWVGRPDO3ANRE72HBZuU0sSEP3a8LDUCSo5Ycz2w==}
+    engines: {node: '>=20.19.0'}
+    cpu: [x64]
+    os: [win32]
+
+  '@auv-js/cli@0.0.28':
+    resolution: {integrity: sha512-ZgLD6e0ruwjaxObls1yldzYFiyiXnwrv5Uoo2vOi6nnycxcHGcYa6C/3Paq9R+48QnDzH1HaLZMXbrPLbFRfLA==}
+    hasBin: true
+
+  '@auv-js/sdk@0.0.28':
+    resolution: {integrity: sha512-Moknh7kgfTH5eaLqbny1X5u4oDxvJrxhRwQHhaUARo1a6FrdWbwsG821VbXPcYlyUJWD+7XItchdt7o0Rqu0Rw==}
 
   '@ax-llm/ax@24.0.5':
     resolution: {integrity: sha512-hQoHPWRCumvZJ1YyLWQwH17gDhIcREUZoP5UFQUS0l6Y4L8qkEKBJ1qfbtUjta+ah7stkzctewDfUzdi+Svzew==}
@@ -6813,6 +6949,9 @@ packages:
   '@bramus/specificity@2.4.2':
     resolution: {integrity: sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw==}
     hasBin: true
+
+  '@bufbuild/protobuf@2.13.0':
+    resolution: {integrity: sha512-acq7c49vxfm1ggJ95P70TX7ABDM0vxr1SYD3BB0o0jnBLB4OAqeHyKuN+cD3w80gXEDQ2zxHpR6CUeA+O/aU9g==}
 
   '@bufbuild/protobuf@2.14.0':
     resolution: {integrity: sha512-C3UGsiCwSprE2NKIIFA3hCDlpXTMCAXRZuEVp88L1GY36Y41+rYL5fryE+nOFhp4p4JPQvdV8PQ4DWgHgeTE+w==}
@@ -8458,6 +8597,20 @@ packages:
       web-worker:
         optional: true
 
+  '@moeru/eventa@1.0.0-beta.1':
+    resolution: {integrity: sha512-4VPs+FlTdIMtlNdBvERvF+e9pnSbz+PN7dgztADtaETCQsSDk9ptHJuzajRBhOlr364k4TotroZa9rrIoVelRQ==}
+    peerDependencies:
+      electron: '>=30'
+      h3: 2.0.0-beta.1
+      web-worker: ^1.5.0
+    peerDependenciesMeta:
+      electron:
+        optional: true
+      h3:
+        optional: true
+      web-worker:
+        optional: true
+
   '@moeru/std@0.1.0-beta.1':
     resolution: {integrity: sha512-ImfoMBchZP+F4aos2nFmlcipcgIhT+ZkUUVWB/bBHEqyB/w/nbI/xgA8a1ibJUtG7RcQnQH+SKom0r4/1xCWqA==}
 
@@ -8654,6 +8807,12 @@ packages:
 
   '@one-ini/wasm@0.1.1':
     resolution: {integrity: sha512-XuySG1E38YScSJoMlqovLru4KTUNSjgVTIjyh7qMX6aNN5HY5Ct5LhRJdxO79JtTzKfzV/bnWpz+zquYrISsvw==}
+
+  '@openpanel/sdk@1.3.1':
+    resolution: {integrity: sha512-mQ5xaBUGXnyRg3qYxwnbVaUYyW7w8u+munrWk/ClnqxEeR2j+FYPiA6noHbHMCFC2aZutYD5OoRzEvw3FBNFxw==}
+
+  '@openpanel/web@1.4.1':
+    resolution: {integrity: sha512-DgUWeocZw+b57YiJjefZPg+6sceR7TdOF8x7Ut75lu3CwcwqGi5jZNPXjikNemGL37aNWXCB4buhcoNan2j7RA==}
 
   '@opentelemetry/api-logs@0.221.0':
     resolution: {integrity: sha512-OlanaW1vv7ufTqQ3/fPLI4arGt5ZoM+P8abOMki6uEYnpRazepSWDwDnnw+la7kE26SHVC18//SMccrDvLKOXQ==}
@@ -10927,6 +11086,12 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@rrweb/types@2.0.0-alpha.20':
+    resolution: {integrity: sha512-RbnDgKxA/odwB1R4gF7eUUj+rdSrq6ROQJsnMw7MIsGzlbSYvJeZN8YY4XqU0G6sKJvXI6bSzk7w/G94jNwzhw==}
+
+  '@rrweb/utils@2.1.7':
+    resolution: {integrity: sha512-ZQpnuthKb8U2BvSDtiX6z8XkEPUUbCXhcrOY5yqqtPP2O5RP8YgPlo8HkU/tFStMd/Wn8cfy9DmkhialwUUvrA==}
+
   '@sapphire/async-queue@1.5.5':
     resolution: {integrity: sha512-cvGzxbba6sav2zZkH8GPf2oGk9yYoD5qrNWdu9fRehifgnFZJMV+nuy2nON2roRO4yQQ+v7MK/Pktl/HgfsUXg==}
     engines: {node: '>=v14.0.0', npm: '>=7.0.0'}
@@ -10938,6 +11103,23 @@ packages:
   '@sapphire/snowflake@3.5.5':
     resolution: {integrity: sha512-xzvBr1Q1c4lCe7i6sRnrofxeO1QTP/LKQ6A6qy0iB4x5yfiSfARMEQEghojzTNALDTcv8En04qYNIco9/K9eZQ==}
     engines: {node: '>=v14.0.0', npm: '>=7.0.0'}
+
+  '@sherpaw/asr@0.2.1':
+    resolution: {integrity: sha512-cJN9B9MGcVA83nzJcY1dpBa89ZD2vvNhZPzsYgH7Pp1h7MbmDxOGM2eeE4AMAmGawQtVdWytSZ903SiZ8WMeOA==}
+    peerDependencies:
+      onnxruntime-web: 1.27.0
+    peerDependenciesMeta:
+      onnxruntime-web:
+        optional: true
+
+  '@sherpaw/preloader@0.2.1':
+    resolution: {integrity: sha512-iKSfK2AyHKZTrbTtDRZo06sWrI56BH5C4o7eCS+UJzK9I8bLgXyUvy4TafXCeJVG/owAr28xXU7J1BAn02wq6Q==}
+
+  '@sherpaw/shared@0.2.1':
+    resolution: {integrity: sha512-diadhrP2nXyy7wxSvEW/2H6CjgDIqek7OmDN/+zxplZYab8KvJS/gu0JWaFk5tuY+9wpNQqvt+OnASGCwwhh4A==}
+
+  '@sherpaw/xsai-transcription@0.2.1':
+    resolution: {integrity: sha512-Ee5StEYLvgFvRJlMbumLKqS1cXFcS0ADJrAUPW3njGh4WjFHhX6gJA/X3LC9lbITvXrNw3yJ/F0QmpkSXFKu4w==}
 
   '@shikijs/core@3.23.0':
     resolution: {integrity: sha512-NSWQz0riNb67xthdm5br6lAkvpDJRTgB36fxlo37ZzM2yq0PQFFzbd8psqC2XMPgCzo1fW6cVi18+ArJ44wqgA==}
@@ -11306,6 +11488,9 @@ packages:
   '@types/cors@2.8.19':
     resolution: {integrity: sha512-mFNylyeyqN93lfe/9CSxOGREz8cpzAhH+E93xJ4xWQf62V8sQ/24reV2nyzUWM6H6Xji+GGHpkbLe7pVoUEskg==}
 
+  '@types/css-font-loading-module@0.0.7':
+    resolution: {integrity: sha512-nl09VhutdjINdWyXxHWN/w9zlNCfr60JUqJbd24YXUuCwgeL0TpFSdElCwb6cxfB6ybE19Gjj4g0jsgkXxKv1Q==}
+
   '@types/culori@4.0.1':
     resolution: {integrity: sha512-43M51r/22CjhbOXyGT361GZ9vncSVQ39u62x5eJdBQFviI8zWp2X5jzqg7k4M6PVgDQAClpy2bUe2dtwEgEDVQ==}
 
@@ -11419,6 +11604,9 @@ packages:
 
   '@types/earcut@2.1.4':
     resolution: {integrity: sha512-qp3m9PPz4gULB9MhjGID7wpo3gJ4bTGXm7ltNDsmOvsPduTeHp8wSW9YckBj3mljeOh4F0m2z/0JKAALRKbmLQ==}
+
+  '@types/emscripten@1.41.6':
+    resolution: {integrity: sha512-uN+9i8bFT5CUcZfyIEYDrSueACEyKGbUs5kC/72DGlZZoinh84sJfVV0i8UOJD1asdzkvLPBRrKs41kZ8MdEXg==}
 
   '@types/esrecurse@4.3.1':
     resolution: {integrity: sha512-xJBAbDifo5hpffDBuHl0Y8ywswbiAp/Wi7Y/GtAgSlZyIABppyurxVueOPE8LUQOxdlgi6Zqce7uoEpqNTeiUw==}
@@ -12324,6 +12512,25 @@ packages:
     peerDependencies:
       '@xsai/generate-transcription': '>=0.5.0-beta.8 <0.6.0'
 
+  '@xsai-apple-vision/vision-electron-plugin@0.1.0':
+    resolution: {integrity: sha512-9vWu4wJqk4znsZ6100d0icKLAQz5vJRsDYnc301ARWpdtpBOI9GPHEXQV7zzokIr4zgcMydfhKt22WXFAJTqjQ==}
+    peerDependencies:
+      electron: '>=39'
+    peerDependenciesMeta:
+      electron:
+        optional: true
+
+  '@xsai-apple-vision/vision-native-darwin-arm64@0.1.0':
+    resolution: {integrity: sha512-VQ+/wAaWpuc8l8LCRhn8YROfuFX4aj/KQ7pfvTD8spMfxWnvt1KqB8HC2W5NaSKZKCFYFzArjKzav8Q4FOiqVg==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@xsai-apple-vision/vision-native@0.1.0':
+    resolution: {integrity: sha512-HwbgzRbV/GEvZUHGidzzJjk2ytYThMf9h+D/QV2kfuCAAJAlnQl6cuWPEjb1e+TSsUiGJrzuUlxsphMNMzHmFQ==}
+
+  '@xsai-apple-vision/vision@0.1.0':
+    resolution: {integrity: sha512-Q3XxBy3pqTtgpxuN7LzWHtwvpp8os4xKx54rRjmbOPkZUJ+5o0sJ6uK+XbwZuSpo+9LtDPfT/oP1vltFhwShgQ==}
+
   '@xsai-ext/providers@0.4.4':
     resolution: {integrity: sha512-PVk3IFOPzPyvss9zY6IO6pJ890F5B6LWGWuhU6DzofWMTnqcUzm0hR2Ml/Qo8kZa3Qy/DZkUT0O1T+5g/fZkWw==}
 
@@ -12428,137 +12635,164 @@ packages:
   '@xsai/utils-chat@0.5.0':
     resolution: {integrity: sha512-z6HZHngL1q9Uasc8L0uQkeGXc7UzqY5LSTc2eYW7EjEgFK4WjGt7iTo0TM+p/ruoQHKy8AAigMkmUQcuGvwPlA==}
 
+  '@xstate/fsm@1.6.5':
+    resolution: {integrity: sha512-b5o1I6aLNeYlU/3CPlj/Z91ybk1gUsKT+5NAJI+2W4UjvS5KLG28K9v5UvNoFVjHV8PajVZ00RH3vnjyQO7ZAw==}
+
   '@yuku-codegen/binding-android-arm64@0.8.7':
     resolution: {integrity: sha512-C/0zV5IhgVdYhGJTwrY0v8dknxlhiKwtVJkMUaexu9/QvRmzlV4vfU3hZlUSgqc2BxQHntL1mCVbDq8j0FRFDw==}
     cpu: [arm64]
     os: [android]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-darwin-arm64@0.8.7':
     resolution: {integrity: sha512-/u+REDMI4a0/lsJXTM4c53/w31OGZLOReZIyg62uhgLs0kc8NHsj/nOcxTdlQjq5gi0zhdkccD9LaLTXcdzPvw==}
     cpu: [arm64]
     os: [darwin]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-darwin-x64@0.8.7':
     resolution: {integrity: sha512-sMMzFOwCo4WXR+/6zIBThOocSC50iIIZZdfiIDbaLvj0Ax/rWt/iavyfEAqajyvzydLyCqR/ZItdLWSRlu1umw==}
     cpu: [x64]
     os: [darwin]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-freebsd-x64@0.8.7':
     resolution: {integrity: sha512-MpdpKXix9P+Y1rKgjvcNeNtGjXeL1CmttNhYINrWls8kRpm4xM/oBGTmn6w7to8lAlwj5jm8q03dQPl5mRv4Qw==}
     cpu: [x64]
     os: [freebsd]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-arm-gnu@0.8.7':
     resolution: {integrity: sha512-rr1srFLlPAmC1vtxfc9C1YLDe3iH09YjfSeeIidBqKhzx1MATjOAq4mjlRUOnhr/L27MotWIYOFKwVsd5JZFOg==}
     cpu: [arm]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-arm-musl@0.8.7':
     resolution: {integrity: sha512-eAufXh8qBRpiSO6ueaMDL+yyoXIGLhpUce72YbcACtZU2qhExwBIJyEtQf5kH2Ki0X2aqkSjSfog4OPtKXan3Q==}
     cpu: [arm]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-arm64-gnu@0.8.7':
     resolution: {integrity: sha512-gw4w6wPoHObBrdIC4duVWLmJOvpdE25j5D7yrM5mACNlK4klRz/lv8hK+ssQk9EJHBgZjSaqZIJVFgqNYbfv7A==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-arm64-musl@0.8.7':
     resolution: {integrity: sha512-L68N6Y4XkqcIaKo3Ra88JEvBEH4AHff44A4INcrxeVWZ8CZtu2tCpfVxe3hR8qQQMcvBSQlDn24KpkCKEhVvfA==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-x64-gnu@0.8.7':
     resolution: {integrity: sha512-dzyAbltJmf3Cqlb8HcFuYIf5Yn0fl1vTr3XJ9HiVNNvOlhqPSArOqtw9vI1p6/VTXTjrMLXlU+s+/kNHiIy/Cw==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-x64-musl@0.8.7':
     resolution: {integrity: sha512-Otw4MH3404q0Bbvl+YTdW9aoUV5vXmUw8260bWvt1XlaoIX/ceSgI4ygheRDMfBPoHt6FDayQaO9OLVUZAgkFA==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-win32-arm64@0.8.7':
     resolution: {integrity: sha512-qo/jyrzryiBuKEsFiuWaBCBe3tRMynQ0qFWFgOEjcCMQeZfBm+wKiVEUEFXXLc7bh8YezguAWp0Mtnhq4ARNyA==}
     cpu: [arm64]
     os: [win32]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-win32-x64@0.8.7':
     resolution: {integrity: sha512-D5lDsVDx6m00E6bWySlWdH72Ca4TPSaphDqB6QjU6MpuNLIJqoGoatYyq2rOmBE8Zv/kunot/o58KGL03P3eiA==}
     cpu: [x64]
     os: [win32]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-parser/binding-android-arm64@0.8.7':
     resolution: {integrity: sha512-eGKYiUDX7Y0V7tDTmg+JTVnXnjMqfXXsorZ+EDf5kxwchQ3Or1HS14MzI2fw+jFhHR85fCWt+mtX33Yao73hIQ==}
     cpu: [arm64]
     os: [android]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-darwin-arm64@0.8.7':
     resolution: {integrity: sha512-Re0RHelKLnjEURulY2/KxW+Ngb8zuNA4BRZuMwgGQNzVumT6u4U2N2hc01oeYVNVof0i7GrXE4UCNBgbpRRnjQ==}
     cpu: [arm64]
     os: [darwin]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-darwin-x64@0.8.7':
     resolution: {integrity: sha512-Hn8DROtQkjlA1ACbPgj4a7eP9IuVOI504oiTwpkWPbpaDWD9KdmnVYCqW+1LfenNK/g7O9NhWGpXEdaCNX7lIA==}
     cpu: [x64]
     os: [darwin]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-freebsd-x64@0.8.7':
     resolution: {integrity: sha512-bAP2OV8wRuzplX/jYxv9+vvqQT8JxyNphI8fLfXGL054Xs+4/J5u33cIm3y4rxY8rdoLmmdiJs2Tq7r7lrDRfA==}
     cpu: [x64]
     os: [freebsd]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-arm-gnu@0.8.7':
     resolution: {integrity: sha512-kTYwJQQgmZeAWdDIWabiReIZMpmfLueIj1tCmjStUtFGhR1Z0qwxonKVfUC4N7h/VhGGzLZ//7O1kgt1QKqgCg==}
     cpu: [arm]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-arm-musl@0.8.7':
     resolution: {integrity: sha512-uL4jE8HPT2BLlxAXyD10LqgPuXa9eDa0BKpCdSANmzIJghq/2eZo3/gQNtaxPZMupWoxjYzSad9IXrwu7aYPXQ==}
     cpu: [arm]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-arm64-gnu@0.8.7':
     resolution: {integrity: sha512-3gVN4pWSKZmXiNX7cU164dR9MPvesCHnlH6nPfpK+yQsCuYphjKKplcb4SnZBrhiqmXbgb2HR0c2TS0IZUPhgA==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-arm64-musl@0.8.7':
     resolution: {integrity: sha512-S0mwfEjoLpxzXeZw802Wa4RaELsQiPtWqG6INcy8j4GtvNFtl4LCX3eGO1XLn9pyLAISLzTRyU3zUCBUPin8lg==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-x64-gnu@0.8.7':
     resolution: {integrity: sha512-lnbWdPmerE5D1uH1G4IEZKnPzCrWCStRGrtgpSIe1RibAo5bZIjDbbbPYXmMHCEh4F+x/JaJpElh26a3r+BPbg==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-x64-musl@0.8.7':
     resolution: {integrity: sha512-769uwndMvMzUvATWbAcEvyLHKA+DzhHSCl/obBUrRdYfRo26yxui6S8y3z7uJ+Naup7UKrDxrpK7OnQkxkl9KQ==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-win32-arm64@0.8.7':
     resolution: {integrity: sha512-mEB/9PlaAkisJ6KWGz0zvywXoU6+80dTlR2LwS7s/jcXXoU6fm2+sitBZXtqu3+Q4DcDgPxM45uWMCzPs0TSRw==}
     cpu: [arm64]
     os: [win32]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-win32-x64@0.8.7':
     resolution: {integrity: sha512-8vNB2DP0ou61nGb8tc/qfi41gfyDXz1MHr2zqL3nR+cJ6CEbiuWV/l/a/vv151gCgiZLLAyGkQGENpozdg716w==}
     cpu: [x64]
     os: [win32]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-toolchain/types@0.8.7':
     resolution: {integrity: sha512-2Z53dNxAJL6UvFoIrDZvYf3zlO8s4VJK4O2hhaB4mXVwwpX/7ajtss3cmfqKvamlNLWyt9FSWs4eoYdlbxpnHA==}
@@ -16545,6 +16779,9 @@ packages:
     resolution: {integrity: sha512-KZxYo1BUkWD2TVFLr0MQoM8vUUigWD3LlD83a/75BqC+4qE0Hb1Vo5v1FgcfaNXvfXzr+5EhQ6ing/CaBijTlw==}
     engines: {node: '>= 18'}
 
+  mitt@3.0.1:
+    resolution: {integrity: sha512-vKivATfr97l2/QBCYAkXYDbrIWPM2IIKEl7YPhjCvKlG3kE2gm+uBo6nEXK3M5/Ffh/FLpKExzOQ3JJoJGFKBw==}
+
   mkcert@3.2.0:
     resolution: {integrity: sha512-026Eivq9RoOjOuLJGzbhGwXUAjBxRX11Z7Jbm4/7lqT/Av+XNy9SPrJte6+UpEt7i+W3e/HZYxQqlQcqXZWSzg==}
     engines: {node: '>=16'}
@@ -17841,6 +18078,15 @@ packages:
   router@2.2.0:
     resolution: {integrity: sha512-nLTrUKm2UyiL7rlhapu/Zl45FwNgkZGaCpZbIHajDYgwlJCOzLSk+cIPAnsEqV955GjILJnKbdQC1nVPz+gAYQ==}
     engines: {node: '>= 18'}
+
+  rrdom@2.1.7:
+    resolution: {integrity: sha512-jm7IN2aaG6891OqFAYw/b8dw5FLiMeCTrU4HIUr40I6tTaUX2Rrhba5vjjMRARQClBFDA04vvf9HFD9WnZFpFg==}
+
+  rrweb-snapshot@2.1.7:
+    resolution: {integrity: sha512-exIZ4dxX498CZszs4ji0KKn8lhX9sBPBdD431t0RQOqCTStAHrmdWKK2s8tWSL32iRS+AOafbMuf6TOIZxW6ug==}
+
+  rrweb@2.0.0-alpha.20:
+    resolution: {integrity: sha512-CZKDlm+j1VA50Ko3gnMbpvguCAleljsTNXPnVk9aeNP8o6T6kolRbISHyDZpqZ4G+bdDLlQOignPP3jEsXs8Gg==}
 
   run-applescript@7.1.0:
     resolution: {integrity: sha512-DPe5pVFaAsinSaV6QjQ6gdiedWDcRCbUuiQfQa2wmWV7+xC9bGulGI8+TdRmoFkAPaBXk8CrAbnlY2ISniJ47Q==}
@@ -20292,6 +20538,48 @@ snapshots:
 
   '@asamuzakjp/nwsapi@2.3.9': {}
 
+  '@auv-js/api-client@0.0.28': {}
+
+  '@auv-js/cli-darwin-arm64@0.0.28':
+    optional: true
+
+  '@auv-js/cli-darwin-x64@0.0.28':
+    optional: true
+
+  '@auv-js/cli-linux-arm64-gnu@0.0.28':
+    optional: true
+
+  '@auv-js/cli-linux-x64-gnu@0.0.28':
+    optional: true
+
+  '@auv-js/cli-win32-arm64-msvc@0.0.28':
+    optional: true
+
+  '@auv-js/cli-win32-x64-msvc@0.0.28':
+    optional: true
+
+  '@auv-js/cli@0.0.28':
+    dependencies:
+      std-env: 4.2.0
+    optionalDependencies:
+      '@auv-js/cli-darwin-arm64': 0.0.28
+      '@auv-js/cli-darwin-x64': 0.0.28
+      '@auv-js/cli-linux-arm64-gnu': 0.0.28
+      '@auv-js/cli-linux-x64-gnu': 0.0.28
+      '@auv-js/cli-win32-arm64-msvc': 0.0.28
+      '@auv-js/cli-win32-x64-msvc': 0.0.28
+
+  '@auv-js/sdk@0.0.28':
+    dependencies:
+      '@auv-js/api-client': 0.0.28
+      '@bufbuild/protobuf': 2.13.0
+      '@grpc/grpc-js': 1.14.4
+      '@moeru/std': 0.1.0-beta.20
+      date-fns: 4.4.0
+      es-toolkit: 1.51.0
+      std-env: 4.2.0
+      tinyexec: 1.3.0
+
   '@ax-llm/ax@24.0.5(zod@4.4.3)':
     dependencies:
       '@opentelemetry/api': 1.9.1
@@ -21288,6 +21576,8 @@ snapshots:
   '@bramus/specificity@2.4.2':
     dependencies:
       css-tree: 3.2.1
+
+  '@bufbuild/protobuf@2.13.0': {}
 
   '@bufbuild/protobuf@2.14.0': {}
 
@@ -22911,6 +23201,13 @@ snapshots:
       h3: 2.0.1-rc.29(crossws@0.4.12(srvx@0.12.7))
       hono: 4.13.3
 
+  '@moeru/eventa@1.0.0-beta.1(electron@43.4.1(supports-color@10.2.2))':
+    dependencies:
+      nanoid: 5.1.16
+      picomatch: 4.0.5
+    optionalDependencies:
+      electron: 43.4.1(supports-color@10.2.2)
+
   '@moeru/std@0.1.0-beta.1': {}
 
   '@moeru/std@0.1.0-beta.17': {}
@@ -23105,6 +23402,14 @@ snapshots:
       - vec3
 
   '@one-ini/wasm@0.1.1': {}
+
+  '@openpanel/sdk@1.3.1': {}
+
+  '@openpanel/web@1.4.1':
+    dependencies:
+      '@openpanel/sdk': 1.3.1
+      '@rrweb/types': 2.0.0-alpha.20
+      rrweb: 2.0.0-alpha.20
 
   '@opentelemetry/api-logs@0.221.0':
     dependencies:
@@ -24944,6 +25249,10 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.5':
     optional: true
 
+  '@rrweb/types@2.0.0-alpha.20': {}
+
+  '@rrweb/utils@2.1.7': {}
+
   '@sapphire/async-queue@1.5.5': {}
 
   '@sapphire/shapeshift@4.0.0':
@@ -24952,6 +25261,29 @@ snapshots:
       lodash: 4.18.1
 
   '@sapphire/snowflake@3.5.5': {}
+
+  '@sherpaw/asr@0.2.1(onnxruntime-web@1.27.0)':
+    optionalDependencies:
+      onnxruntime-web: 1.27.0
+
+  '@sherpaw/preloader@0.2.1': {}
+
+  '@sherpaw/shared@0.2.1':
+    dependencies:
+      '@types/emscripten': 1.41.6
+
+  '@sherpaw/xsai-transcription@0.2.1(electron@43.4.1(supports-color@10.2.2))(onnxruntime-web@1.27.0)':
+    dependencies:
+      '@moeru/eventa': 1.0.0-beta.1(electron@43.4.1(supports-color@10.2.2))
+      '@moeru/std': 0.1.0-beta.17
+      '@sherpaw/asr': 0.2.1(onnxruntime-web@1.27.0)
+      '@sherpaw/preloader': 0.2.1
+      '@sherpaw/shared': 0.2.1
+    transitivePeerDependencies:
+      - electron
+      - h3
+      - onnxruntime-web
+      - web-worker
 
   '@shikijs/core@3.23.0':
     dependencies:
@@ -25306,6 +25638,8 @@ snapshots:
     dependencies:
       '@types/node': 26.2.0
 
+  '@types/css-font-loading-module@0.0.7': {}
+
   '@types/culori@4.0.1': {}
 
   '@types/d3-array@3.2.2': {}
@@ -25440,6 +25774,8 @@ snapshots:
   '@types/draco3d@1.4.10': {}
 
   '@types/earcut@2.1.4': {}
+
+  '@types/emscripten@1.41.6': {}
 
   '@types/esrecurse@4.3.1': {}
 
@@ -26728,6 +27064,31 @@ snapshots:
       '@xsai/generate-transcription': 0.5.0-beta.8
       '@xsai/shared': 0.5.0-beta.8
 
+  '@xsai-apple-vision/vision-electron-plugin@0.1.0(electron@43.4.1(supports-color@10.2.2))(h3@2.0.1-rc.29(crossws@0.4.12(srvx@0.12.7)))(hono@4.13.3)':
+    dependencies:
+      '@moeru/eventa': 1.0.0(electron@43.4.1(supports-color@10.2.2))(h3@2.0.1-rc.29(crossws@0.4.12(srvx@0.12.7)))(hono@4.13.3)
+      '@xsai-apple-vision/vision': 0.1.0
+    optionalDependencies:
+      electron: 43.4.1(supports-color@10.2.2)
+    transitivePeerDependencies:
+      - '@tauri-apps/api'
+      - h3
+      - hono
+      - web-worker
+
+  '@xsai-apple-vision/vision-native-darwin-arm64@0.1.0':
+    optional: true
+
+  '@xsai-apple-vision/vision-native@0.1.0':
+    dependencies:
+      '@xsai-apple-vision/vision': 0.1.0
+    optionalDependencies:
+      '@xsai-apple-vision/vision-native-darwin-arm64': 0.1.0
+
+  '@xsai-apple-vision/vision@0.1.0':
+    dependencies:
+      '@xsai/shared': 0.5.0-beta.8
+
   '@xsai-ext/providers@0.4.4':
     dependencies:
       '@xsai/shared': 0.4.4
@@ -26906,6 +27267,8 @@ snapshots:
   '@xsai/utils-chat@0.5.0':
     dependencies:
       '@xsai/shared-chat': 0.5.0
+
+  '@xstate/fsm@1.6.5': {}
 
   '@yuku-codegen/binding-android-arm64@0.8.7':
     optional: true
@@ -31554,6 +31917,8 @@ snapshots:
     dependencies:
       minipass: 7.1.3
 
+  mitt@3.0.1: {}
+
   mkcert@3.2.0:
     dependencies:
       commander: 11.1.0
@@ -33170,6 +33535,25 @@ snapshots:
       path-to-regexp: 8.4.2
     transitivePeerDependencies:
       - supports-color
+
+  rrdom@2.1.7:
+    dependencies:
+      rrweb-snapshot: 2.1.7
+
+  rrweb-snapshot@2.1.7:
+    dependencies:
+      postcss: 8.5.26
+
+  rrweb@2.0.0-alpha.20:
+    dependencies:
+      '@rrweb/types': 2.0.0-alpha.20
+      '@rrweb/utils': 2.1.7
+      '@types/css-font-loading-module': 0.0.7
+      '@xstate/fsm': 1.6.5
+      base64-arraybuffer: 1.0.2
+      mitt: 3.0.1
+      rrdom: 2.1.7
+      rrweb-snapshot: 2.1.7
 
   run-applescript@7.1.0: {}
 

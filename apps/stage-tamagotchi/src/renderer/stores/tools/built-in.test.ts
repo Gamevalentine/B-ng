@@ -32,20 +32,17 @@ describe('useTamagotchiBuiltinToolsStore', async () => {
     setActivePinia(createPinia())
   })
 
-  it('registers built-in executors as request-selected tools', async () => {
+  it('keeps public weather available by default while other tools remain request-selected', async () => {
     const toolsStore = useLlmToolsStore()
 
     await useTamagotchiBuiltinToolsStore().refresh()
 
-    expect(toolsStore.activeTools).toEqual([])
-    expect(toolsStore.tools.map(tool => ({
-      id: tool.id,
-      defaultActive: tool.defaultActive,
-    }))).toEqual([
-      { id: 'tamagotchi:image_journal', defaultActive: false },
-      { id: 'tamagotchi:stage_widgets', defaultActive: false },
-      { id: 'tamagotchi:get_weather', defaultActive: false },
-    ])
+    expect(toolsStore.activeTools.map(tool => tool.function.name)).toContain('get_weather')
+    expect(toolsStore.activeTools.map(tool => tool.function.name)).not.toContain('computer_use')
+    expect(toolsStore.tools.find(tool => tool.id === 'tamagotchi:get_weather')?.defaultActive).toBe(true)
+    expect(toolsStore.tools.find(tool => tool.id === 'tamagotchi:image_journal')?.defaultActive).toBe(false)
+    expect(toolsStore.tools.find(tool => tool.id === 'tamagotchi:stage_widgets')?.defaultActive).toBe(false)
+    expect(toolsStore.tools.filter(tool => tool.requiresExplicitSelection).map(tool => tool.function.name)).toEqual(['computer_use', 'computer_use_read_image'])
     expect(toolsStore.getToolsByNames('get_weather')[0]?.function.name).toBe('get_weather')
   })
 })

@@ -46,9 +46,11 @@ export function setupSettingsWindowReusableFunc(params: {
 
   const reusable = createReusableWindow(async () => {
     const window = new BrowserWindow({
-      title: 'Settings',
-      width: 600.0,
-      height: 800.0,
+      title: 'BÔNG - Cài đặt',
+      width: 1180,
+      height: 820,
+      minWidth: 900,
+      minHeight: 680,
       show: false,
       icon,
       webPreferences: {

@@ -1,4 +1,5 @@
 import { join, resolve } from 'node:path'
+import { env } from 'node:process'
 
 import VueI18n from '@intlify/unplugin-vue-i18n/vite'
 import templateCompilerOptions from '@tresjs/core/template-compiler-options'
@@ -12,12 +13,15 @@ import Layouts from 'vite-plugin-vue-layouts'
 import VueMacros from 'vue-macros/vite'
 import VueRouter from 'vue-router/vite'
 
+import { paraformerBilingualZhEn, xAsrBilingualZhEnInt8, zipformerMultilingual } from '@proj-airi/provider-inference/sherpaw-transcription/models'
 import { Download } from '@proj-airi/unplugin-fetch'
 import { DownloadLive2DSDK } from '@proj-airi/unplugin-live2d-sdk'
+import { Sherpaw } from '@proj-airi/vite-plugin-sherpaw'
 import { defineConfig } from 'electron-vite'
 
 const stageUIAssetsRoot = resolve(join(import.meta.dirname, '..', '..', 'packages', 'stage-ui', 'src', 'assets'))
 const sharedCacheDir = resolve(join(import.meta.dirname, '..', '..', '.cache'))
+const sherpawModels = [paraformerBilingualZhEn, zipformerMultilingual, xAsrBilingualZhEnInt8]
 
 export default defineConfig({
   main: {
@@ -28,7 +32,10 @@ export default defineConfig({
           // them into ESM and causing issues in runtime.
           'electron-click-drag-plugin',
           'uiohook-napi',
+          '@auv-js/cli',
+          '@auv-js/sdk',
           '@xsai-apple-speech/transcription-native',
+          '@xsai-apple-vision/vision-native',
         ],
       },
     },
@@ -97,6 +104,13 @@ export default defineConfig({
     // https://github.com/alex8088/electron-vite/issues/99#issuecomment-1862671727
     base: './',
 
+    experimental: {
+      renderBuiltUrl(filename, { type }) {
+        if (type === 'asset' && /^assets\/preload(?:\.js)?-[\w-]+\.(?:data|metadata)$/.test(filename))
+          return `airi-sherpaw://assets/${filename.slice('assets/'.length)}`
+      },
+    },
+
     build: {
       rolldownOptions: {
         input: {
@@ -107,6 +121,10 @@ export default defineConfig({
     },
 
     optimizeDeps: {
+      // On Windows/exFAT, avoid Rolldown dependency scanning of workspace source packages.
+      noDiscovery: true,
+      // Prebundle the CJS dependency imported by @moeru/eventa.
+      include: ['picomatch', 'extend', 'localforage', 'html2canvas', 'url', '@pixi/utils', 'eventemitter3', 'debug', 'jszip'],
       exclude: [
         // Internal Packages
         '@proj-airi/stage-ui/*',
@@ -151,6 +169,9 @@ export default defineConfig({
     },
 
     server: {
+      // Bind explicitly to IPv4 so Electron reloads never resolve localhost to an
+      // address family that Vite is not listening on during local Windows development.
+      host: '127.0.0.1',
       fs: {
         // To mute errors like:
         //   The request id ".../node_modules/@fontsource/sniglet/files/sniglet-latin-400-normal.woff" is outside of Vite serving allow list.
@@ -237,8 +258,8 @@ export default defineConfig({
       // https://github.com/JohnCampionJr/vite-plugin-vue-layouts
       Layouts({
         layoutsDirs: [
-          resolve(import.meta.dirname, 'src', 'renderer', 'layouts'),
           resolve(import.meta.dirname, '..', '..', 'packages', 'stage-layouts', 'src', 'layouts'),
+          resolve(import.meta.dirname, 'src', 'renderer', 'layouts'),
         ],
         pagesDirs: [resolve(import.meta.dirname, 'src', 'renderer', 'pages')],
       }),
@@ -252,6 +273,19 @@ export default defineConfig({
         fullInstall: true,
       }),
 
+      Sherpaw({
+        models: sherpawModels,
+        developmentModels: sherpawModels,
+        // BÔNG ships the pinned Vietnamese Zipformer offline by default.
+        // SHERPAW_BUNDLE_MODELS=true keeps the full upstream catalogue;
+        // =false opts out explicitly for a lightweight distribution build.
+        bundledModels: env.SHERPAW_BUNDLE_MODELS === 'true'
+          ? sherpawModels
+          : env.SHERPAW_BUNDLE_MODELS === 'false'
+            ? []
+            : [zipformerMultilingual],
+        cacheDir: sharedCacheDir,
+      }),
       DownloadLive2DSDK(),
       Download('https://dist.ayaka.moe/live2d-models/hiyori_free_zh.zip', 'hiyori_free_zh.zip', 'live2d/models', { parentDir: stageUIAssetsRoot, cacheDir: sharedCacheDir }),
       Download('https://dist.ayaka.moe/live2d-models/hiyori_pro_zh.zip', 'hiyori_pro_zh.zip', 'live2d/models', { parentDir: stageUIAssetsRoot, cacheDir: sharedCacheDir }),

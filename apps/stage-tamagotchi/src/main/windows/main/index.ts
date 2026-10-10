@@ -6,6 +6,7 @@ import type { ServerChannel } from '../../services/airi/channel-server'
 import type { GodotStageManager } from '../../services/airi/godot-stage'
 import type { McpStdioManager } from '../../services/airi/mcp-servers'
 import type { AutoUpdater } from '../../services/electron/auto-updater'
+import type { ChatWindowManager } from '../chat'
 import type { EditorWindowManager } from '../editor'
 import type { NoticeWindowManager } from '../notice'
 import type { OnboardingWindowManager } from '../onboarding'
@@ -21,19 +22,14 @@ import { defineInvokeHandler } from '@moeru/eventa'
 import { createContext } from '@moeru/eventa/adapters/electron/main'
 import { initScreenCaptureForWindow } from '@proj-airi/electron-screen-capture/main'
 import { defu } from 'defu'
-import { BrowserWindow, ipcMain, powerMonitor } from 'electron'
+import { BrowserWindow, ipcMain, screen } from 'electron'
 import { isLinux, isMacOS } from 'std-env'
 import { array, number, object, optional, string } from 'valibot'
 
 import icon from '../../../../resources/icon.png?asset'
 
 import { electronStartDraggingWindow } from '../../../shared/eventa'
-import {
-  electronStageProactiveCheckIn,
-  electronStageProactiveHide,
-  electronStageProactiveReply,
-  electronStageProactiveSetPinned,
-} from '../../../shared/eventa/auto-presence'
+import { clampBoundsWithinRect } from '../../../shared/utils/electron/display'
 import { onAppBeforeQuit } from '../../libs/bootkit/lifecycle'
 import { baseUrl, getElectronMainDirname, load, withHashRoute } from '../../libs/electron/location'
 import { createConfig } from '../../libs/electron/persistence'
@@ -53,49 +49,10 @@ const appConfigSchema = object({
 
 type AppConfig = InferOutput<typeof appConfigSchema>
 
-const HUMAN_WAKE_HOUR = 7
-const HUMAN_WAKE_END_HOUR = 23
-const HUMAN_WAKE_END_MINUTE = 30
-const HUMAN_WAKE_RETRY_MS = 60 * 1000
-const USER_ACTIVE_IDLE_SECONDS = 5 * 60
-const PROACTIVE_WAKE_MIN_MS = 45 * 60 * 1000
-const PROACTIVE_WAKE_MAX_MS = 120 * 60 * 1000
-const PROACTIVE_AIRI_VISIBLE_MS = 3 * 60 * 1000
-const PROACTIVE_MESSAGES = [
-  'Anh vẫn đang làm việc à?',
-  'Nghỉ một chút chưa?',
-  'Em ghé qua xem anh còn ở đây không nè.',
-]
-
-function isWithinHumanHours(date: Date) {
-  const minutes = date.getHours() * 60 + date.getMinutes()
-  const startMinutes = HUMAN_WAKE_HOUR * 60
-  const endMinutes = HUMAN_WAKE_END_HOUR * 60 + HUMAN_WAKE_END_MINUTE
-  return minutes >= startMinutes && minutes < endMinutes
-}
-
-function getNextHumanWakeAt(date: Date) {
-  const nextWake = new Date(date)
-  nextWake.setHours(HUMAN_WAKE_HOUR, 0, 0, 0)
-
-  if (nextWake.getTime() <= date.getTime())
-    nextWake.setDate(nextWake.getDate() + 1)
-
-  return nextWake
-}
-
-function isUserActive() {
-  return powerMonitor.getSystemIdleTime() < USER_ACTIVE_IDLE_SECONDS
-}
-
-function randomDelay(min: number, max: number) {
-  return Math.floor(min + Math.random() * (max - min + 1))
-}
-
 export async function setupMainWindow(params: {
   editorWindow: EditorWindowManager
   settingsWindow: SettingsWindowManager
-  chatWindow: () => Promise<BrowserWindow>
+  chatWindow: ChatWindowManager
   widgetsManager: WidgetsWindowManager
   noticeWindow: NoticeWindowManager
   autoUpdater: AutoUpdater
@@ -131,6 +88,9 @@ export async function setupMainWindow(params: {
     webPreferences: {
       preload: join(dirname(fileURLToPath(import.meta.url)), '../preload/index.mjs'),
       sandbox: false,
+      // The companion must keep lightweight wake/sleep timers alive while its
+      // transparent character window is hidden.
+      backgroundThrottling: false,
     },
     // Thanks to [@HeartArmy](https://github.com/HeartArmy) for the tip implementation.
     //
@@ -140,213 +100,39 @@ export async function setupMainWindow(params: {
     ...transparentWindowConfig(),
   })
 
+  // Keep the floating companion above the taskbar. Persisted positions can
+  // become invalid after dragging, changing DPI, or switching displays.
+  function keepCompanionInWorkArea() {
+    if (window.isDestroyed())
+      return
+
+    const current = window.getBounds()
+    const area = screen.getDisplayMatching(current).workArea
+    const safeArea = { ...area, height: Math.max(1, area.height - 16) }
+    const adjusted = clampBoundsWithinRect(current, safeArea)
+    if (current.x !== adjusted.x || current.y !== adjusted.y
+      || current.width !== adjusted.width || current.height !== adjusted.height) {
+      window.setBounds(adjusted)
+    }
+  }
+
+  keepCompanionInWorkArea()
+  window.on('moved', keepCompanionInWorkArea)
+  window.on('resized', keepCompanionInWorkArea)
+  screen.on('display-metrics-changed', keepCompanionInWorkArea)
+  screen.on('display-removed', keepCompanionInWorkArea)
+  window.once('closed', () => {
+    screen.off('display-metrics-changed', keepCompanionInWorkArea)
+    screen.off('display-removed', keepCompanionInWorkArea)
+  })
+
   if (params.onWindowCreated) {
     params.onWindowCreated(window)
   }
 
-  const { context: stageEventaContext } = createContext(ipcMain, window)
-
   let allowClose = false
-  let humanWakeTimer: ReturnType<typeof setTimeout> | undefined
-  let proactiveWakeTimer: ReturnType<typeof setTimeout> | undefined
-  let proactiveHideTimer: ReturnType<typeof setTimeout> | undefined
-  let proactivePinned = false
-  let proactiveActiveSince: number | undefined
-  let proactiveWakeAfterMs = randomDelay(PROACTIVE_WAKE_MIN_MS, PROACTIVE_WAKE_MAX_MS)
-
-  function clearProactiveHideTimer() {
-    if (!proactiveHideTimer)
-      return
-
-    clearTimeout(proactiveHideTimer)
-    proactiveHideTimer = undefined
-  }
-
-  function isChatWindowVisible() {
-    return BrowserWindow.getAllWindows().some(candidate => (
-      candidate !== window
-      && !candidate.isDestroyed()
-      && candidate.getTitle() === 'Chat'
-      && candidate.isVisible()
-    ))
-  }
-
-  function scheduleAiriAutoHide(delay = PROACTIVE_AIRI_VISIBLE_MS) {
-    clearProactiveHideTimer()
-
-    proactiveHideTimer = setTimeout(() => {
-      proactiveHideTimer = undefined
-
-      if (window.isDestroyed() || !window.isVisible() || proactivePinned)
-        return
-
-      if (isChatWindowVisible()) {
-        scheduleAiriAutoHide()
-        return
-      }
-
-      window.hide()
-    }, delay)
-  }
-
-  function showAiriMessage(text: string) {
-    if (!window.isVisible())
-      window.showInactive()
-
-    stageEventaContext.emit(electronStageProactiveCheckIn, { text })
-
-    if (!proactivePinned)
-      scheduleAiriAutoHide()
-  }
-
-  function randomProactiveMessage() {
-    return PROACTIVE_MESSAGES[Math.floor(Math.random() * PROACTIVE_MESSAGES.length)] ?? PROACTIVE_MESSAGES[0]
-  }
-
-  function resetProactiveActivity() {
-    proactiveActiveSince = undefined
-    proactiveWakeAfterMs = randomDelay(PROACTIVE_WAKE_MIN_MS, PROACTIVE_WAKE_MAX_MS)
-  }
-
-  function getNextProactiveActivityCheckDelay() {
-    const idleMs = powerMonitor.getSystemIdleTime() * 1000
-    const remainingActiveMs = USER_ACTIVE_IDLE_SECONDS * 1000 - idleMs
-    return Math.max(1000, Math.min(HUMAN_WAKE_RETRY_MS, remainingActiveMs))
-  }
-
-  function scheduleHumanWake(delayOverride?: number) {
-    if (humanWakeTimer)
-      clearTimeout(humanWakeTimer)
-
-    const now = new Date()
-    const nextWake = getNextHumanWakeAt(now)
-    const delay = delayOverride ?? Math.max(0, nextWake.getTime() - now.getTime())
-
-    humanWakeTimer = setTimeout(() => {
-      humanWakeTimer = undefined
-
-      const wakeTime = new Date()
-      if (window.isDestroyed())
-        return
-
-      if (!isWithinHumanHours(wakeTime)) {
-        scheduleHumanWake()
-        return
-      }
-
-      if (!window.isVisible()) {
-        if (!isUserActive()) {
-          scheduleHumanWake(HUMAN_WAKE_RETRY_MS)
-          return
-        }
-
-        showAiriMessage(randomProactiveMessage())
-      }
-
-      scheduleHumanWake()
-    }, delay)
-  }
-
-  function scheduleProactiveWake(delayOverride = 0) {
-    if (proactiveWakeTimer)
-      clearTimeout(proactiveWakeTimer)
-
-    proactiveWakeTimer = setTimeout(() => {
-      proactiveWakeTimer = undefined
-
-      const wakeTime = new Date()
-      const now = wakeTime.getTime()
-      if (window.isDestroyed())
-        return
-
-      if (!isWithinHumanHours(wakeTime)) {
-        resetProactiveActivity()
-        const nextWake = getNextHumanWakeAt(wakeTime)
-        scheduleProactiveWake(Math.max(HUMAN_WAKE_RETRY_MS, nextWake.getTime() - now))
-        return
-      }
-
-      if (!isUserActive()) {
-        resetProactiveActivity()
-        scheduleProactiveWake(HUMAN_WAKE_RETRY_MS)
-        return
-      }
-
-      if (proactiveActiveSince === undefined) {
-        proactiveActiveSince = now
-        proactiveWakeAfterMs = randomDelay(PROACTIVE_WAKE_MIN_MS, PROACTIVE_WAKE_MAX_MS)
-        scheduleProactiveWake(getNextProactiveActivityCheckDelay())
-        return
-      }
-
-      if (now - proactiveActiveSince < proactiveWakeAfterMs) {
-        scheduleProactiveWake(getNextProactiveActivityCheckDelay())
-        return
-      }
-
-      if (window.isVisible()) {
-        resetProactiveActivity()
-        scheduleProactiveWake(getNextProactiveActivityCheckDelay())
-        return
-      }
-
-      showAiriMessage(randomProactiveMessage())
-
-      resetProactiveActivity()
-      scheduleProactiveWake(getNextProactiveActivityCheckDelay())
-    }, delayOverride)
-  }
-
-  const cleanUpProactiveHideInvoke = defineInvokeHandler(stageEventaContext, electronStageProactiveHide, () => {
-    proactivePinned = false
-    clearProactiveHideTimer()
-    if (!window.isDestroyed())
-      window.hide()
-  })
-
-  const cleanUpProactiveReplyInvoke = defineInvokeHandler(stageEventaContext, electronStageProactiveReply, async () => {
-    const chat = await params.chatWindow()
-    if (chat.isDestroyed())
-      return
-
-    if (!chat.isVisible())
-      chat.show()
-    chat.focus()
-
-    if (!proactivePinned)
-      scheduleAiriAutoHide()
-  })
-
-  const cleanUpProactiveSetPinnedInvoke = defineInvokeHandler(stageEventaContext, electronStageProactiveSetPinned, ({ pinned }) => {
-    proactivePinned = pinned
-
-    if (proactivePinned)
-      clearProactiveHideTimer()
-    else if (window.isVisible())
-      scheduleAiriAutoHide()
-
-    return proactivePinned
-  })
-
-  function handleProactiveActivityBreak() {
-    resetProactiveActivity()
-  }
-
-  powerMonitor.on('suspend', handleProactiveActivityBreak)
-  powerMonitor.on('lock-screen', handleProactiveActivityBreak)
-
   onAppBeforeQuit(() => {
     allowClose = true
-    if (humanWakeTimer)
-      clearTimeout(humanWakeTimer)
-    if (proactiveWakeTimer)
-      clearTimeout(proactiveWakeTimer)
-    clearProactiveHideTimer()
-    cleanUpProactiveHideInvoke()
-    cleanUpProactiveReplyInvoke()
-    cleanUpProactiveSetPinnedInvoke()
-    powerMonitor.removeListener('suspend', handleProactiveActivityBreak)
-    powerMonitor.removeListener('lock-screen', handleProactiveActivityBreak)
   })
 
   // NOTICE: in development mode, open devtools by default
@@ -393,17 +179,11 @@ export async function setupMainWindow(params: {
 
   window.on('resize', () => handleNewBounds(window.getBounds()))
   window.on('move', () => handleNewBounds(window.getBounds()))
-  window.on('hide', () => {
-    proactivePinned = false
-    clearProactiveHideTimer()
-  })
   window.on('close', (event) => {
     if (allowClose) {
       return
     }
 
-    proactivePinned = false
-    clearProactiveHideTimer()
     event.preventDefault()
     window.hide()
   })
@@ -419,11 +199,7 @@ export async function setupMainWindow(params: {
   }
   setWindowAlwaysOnTop(window, true)
 
-  window.on('ready-to-show', () => {
-    window.show()
-    scheduleHumanWake()
-    scheduleProactiveWake()
-  })
+  window.on('ready-to-show', () => window!.show())
   protectPrivilegedWindowNavigation(window)
 
   await setupMainWindowElectronInvokes({
@@ -470,7 +246,8 @@ export async function setupMainWindow(params: {
     // manage events within eventa's context system.
     ipcMain.setMaxListeners(0)
 
-    const cleanUpWindowDraggingInvokeHandler = defineInvokeHandler(stageEventaContext, electronStartDraggingWindow, handleStartDraggingWindow)
+    const { context } = createContext(ipcMain, window)
+    const cleanUpWindowDraggingInvokeHandler = defineInvokeHandler(context, electronStartDraggingWindow, handleStartDraggingWindow)
 
     window.on('closed', () => {
       cleanUpWindowDraggingInvokeHandler()
