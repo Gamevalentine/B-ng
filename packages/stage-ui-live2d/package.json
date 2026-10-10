@@ -31,7 +31,9 @@
     "./utils/live2d-zip-loader": "./src/utils/live2d-zip-loader.ts",
     "./utils/live2d-opfs-registration": "./src/utils/live2d-opfs-registration.ts",
     "./utils/opfs-loader": "./src/utils/opfs-loader.ts",
-    "./utils/ambient-light-test-card": "./src/utils/ambient-light-test-card.ts"
+    "./utils/ambient-light-test-card": "./src/utils/ambient-light-test-card.ts",
+    "./components/diagnostics/screen-ambient-light-preview.vue": "./src/components/diagnostics/screen-ambient-light-preview.vue",
+    "./filters/screen-ambient-light": "./src/filters/screen-ambient-light.ts"
   },
   "scripts": {
     "typecheck": "vue-tsc --noEmit"
