@@ -28,7 +28,10 @@
     "./electron-renderer": "./src/electron-renderer.d.ts",
     "./composables": "./src/composables/index.ts",
     "./webgpu": "./src/webgpu/index.ts",
-    "./model-assets": "./src/model-assets/index.ts"
+    "./model-assets": "./src/model-assets/index.ts",
+    "./analytics/openpanel": "./src/analytics/openpanel.ts",
+    "./screen-ambient-light": "./src/screen-ambient-light/index.ts",
+    "./stores/screen-ambient-light": "./src/stores/screen-ambient-light.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

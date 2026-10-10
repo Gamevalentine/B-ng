@@ -179,7 +179,8 @@
     "xsschema": "catalog:",
     "zod": "catalog:",
     "@proj-airi/vite-plugin-sherpaw": "workspace:^",
-    "@sherpaw/xsai-transcription": "catalog:"
+    "@sherpaw/xsai-transcription": "catalog:",
+    "@openpanel/web": "catalog:"
   },
   "devDependencies": {
     "@fontsource-variable/comfortaa": "catalog:",

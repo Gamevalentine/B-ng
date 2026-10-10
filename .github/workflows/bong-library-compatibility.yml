@@ -8,6 +8,8 @@ on:
       - 'packages/plugin-sdk/**'
       - 'packages/provider-inference/**'
       - 'packages/stage-ui/**'
+      - 'packages/stage-shared/**'
+      - 'packages/stage-ui-live2d/**'
       - 'packages/pipelines-audio/**'
       - 'tools/bong-tts/**'
       - 'apps/stage-tamagotchi/**'
