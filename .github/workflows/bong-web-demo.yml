@@ -1,0 +1,109 @@
+name: BONG web demo preview (temporary)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [bong-web-demo]
+    paths:
+      - 'apps/stage-web/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'package.json'
+      - '.github/workflows/bong-web-demo.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build web and dependent packages
+        run: pnpm run build:web
+      - name: Archive web preview files (not a public deployment)
+        uses: actions/upload-artifact@v4
+        with:
+          name: bong-web-demo-dist
+          path: apps/stage-web/dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy-temporary-preview:
+    name: Deploy isolated 60-minute HTTPS preview
+    needs: build-web
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: bong-web-demo-dist
+          path: apps/stage-web/dist
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Enforce temporary-account static asset limits for UI preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Temporary Cloudflare preview: excluding binary assets over 5 MB (5 MiB limit):"
+          while IFS= read -r -d '' asset; do
+            case "$asset" in
+              *.html|*.js|*.css)
+                echo "::error::Required web entry asset is too large: $asset"
+                exit 1
+                ;;
+              *)
+                echo "::warning::Skipping oversized binary/media asset in UI-only preview: $asset ($(stat -c '%s' "$asset") bytes)"
+                rm -- "$asset"
+                ;;
+            esac
+          done < <(find apps/stage-web/dist -type f -size +5000000c -print0)
+          test -s apps/stage-web/dist/index.html
+          # Source maps are developer-only and should not be published to temporary preview hosts.
+          source_map_count="$(find apps/stage-web/dist -type f -name '*.map' | wc -l)"
+          echo "Removing $source_map_count developer source maps from preview package."
+          find apps/stage-web/dist -type f -name '*.map' -delete
+          asset_count="$(find apps/stage-web/dist -type f | wc -l)"
+          echo "Preview static asset count: $asset_count (temporary limit: 1000)"
+          if (( asset_count > 1000 )); then
+            echo "::error::Too many preview assets for a temporary account: $asset_count"
+            exit 1
+          fi
+      - name: Upload static files to temporary Cloudflare account
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$(mktemp)"
+          trap 'rm -f "$output"' EXIT
+          # Wrangler prints a privileged claim token: never stream its output into public CI logs.
+          if ! npx --yes wrangler@4.149.0 deploy --temporary --config apps/stage-web/wrangler-bong-preview.toml >"$output" 2>&1; then
+            echo "::error::Temporary preview deployment failed. No production deployment attempted."
+            # Report generic, sanitized errors only; never reveal a claim token or temporary credentials.
+            grep -Ei '(ERROR|failed|exceeded)' "$output" | sed -E 's@https?://[^[:space:]]+@[redacted-url]@g' | head -n 8 || true
+            exit 1
+          fi
+          url="$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' "$output" | tail -n 1 || true)"
+          if [[ -z "$url" ]]; then
+            echo "::error::Temporary preview returned no verified workers.dev URL."
+            exit 1
+          fi
+          echo "## BÔNG Web HTTPS Preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Open: **$url**" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "This isolated preview expires after 60 minutes unless claimed. It does not prove the BÔNG avatar, voice, or AI integration works." >> "$GITHUB_STEP_SUMMARY"
+          echo "Temporary HTTPS preview URL: $url"
