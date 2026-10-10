@@ -67,7 +67,8 @@
     "pixi-live2d-display": "catalog:",
     "three": "catalog:",
     "vue": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@moeru/std": "catalog:"
   },
   "devDependencies": {
     "@types/culori": "catalog:",
