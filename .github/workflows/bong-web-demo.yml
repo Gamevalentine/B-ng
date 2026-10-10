@@ -73,6 +73,10 @@ jobs:
             esac
           done < <(find apps/stage-web/dist -type f -size +5000000c -print0)
           test -s apps/stage-web/dist/index.html
+          # Source maps are developer-only and should not be published to temporary preview hosts.
+          source_map_count="$(find apps/stage-web/dist -type f -name '*.map' | wc -l)"
+          echo "Removing $source_map_count developer source maps from preview package."
+          find apps/stage-web/dist -type f -name '*.map' -delete
           asset_count="$(find apps/stage-web/dist -type f | wc -l)"
           echo "Preview static asset count: $asset_count (temporary limit: 1000)"
           if (( asset_count > 1000 )); then
