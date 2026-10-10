@@ -30,3 +30,11 @@ This branch is a **draft migration**, NOT a working Windows release.
 `.github/workflows/build-windows-oneclick.yml` is manual-only and hard-gated to require real runtime packaging verification.
 
 Do not merge, publish installers, or deploy to the user's laptop until source parity, lockfile, real Windows playback and Sherpa QA all pass and the owner approves.
+
+
+## Build / lockfile verification (2026-10-10)
+
+- GitHub Actions run [38038858620](https://github.com/Gamevalentine/B-ng/actions/runs/38038858620) passed **all** draft compatibility steps, including `stage-ui` typecheck and Electron build (source build only, no Windows installer).
+- The shared CI failure on the previous head was `ERR_PNPM_OUTDATED_LOCKFILE`: package manifests had changed since the existing `pnpm-lock.yaml` was generated.
+- Workflow [38039206306](https://github.com/Gamevalentine/B-ng/actions/runs/38039206306) regenerated and committed `pnpm-lock.yaml` successfully to this draft branch without running project scripts or installing an app.
+- Native Windows package, Sherpa/ZeroTTS runtime models, microphone, speaker, character voice quality and 2D lip sync remain **unverified**. Keep the Pull Request as a draft and block Windows releases.
