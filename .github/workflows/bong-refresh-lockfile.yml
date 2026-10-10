@@ -1,0 +1,69 @@
+name: BONG refresh draft lockfile
+
+on:
+  push:
+    branches:
+      - bong/github-actions-migration-20261009
+    paths:
+      - '.github/workflows/bong-refresh-lockfile.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bong-refresh-lockfile-draft
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Regenerate pnpm lockfile only
+    if: github.repository == 'Gamevalentine/B-ng' && github.ref == 'refs/heads/bong/github-actions-migration-20261009'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout BONG draft branch
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: true
+
+      - name: Setup pinned pnpm from the existing CI
+        uses: pnpm/setup@v2
+        with:
+          runtime: node@26.7.0
+          cache: true
+          install: false
+
+      - name: Regenerate lockfile without installing or running packages
+        run: pnpm install --lockfile-only --no-frozen-lockfile --ignore-scripts
+
+      - name: Validate only pnpm-lock.yaml changed
+        shell: bash
+        run: |
+          git diff --check -- pnpm-lock.yaml
+          if git status --porcelain | grep -v -E '^ M pnpm-lock.yaml$|^$'; then
+            echo "Unexpected file changes detected; refusing to commit." >&2
+            exit 1
+          fi
+          if git diff --quiet -- pnpm-lock.yaml; then
+            echo "Lockfile is already in sync." >> "$GITHUB_STEP_SUMMARY"
+          else
+            git diff --numstat -- pnpm-lock.yaml
+          fi
+
+      - name: Commit regenerated lockfile to draft branch only
+        shell: bash
+        run: |
+          if git diff --quiet -- pnpm-lock.yaml; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- pnpm-lock.yaml
+          git commit -m "build(bong): refresh pnpm lockfile for imported sources"
+          git push origin HEAD:bong/github-actions-migration-20261009
+          {
+            echo "## BÔNG dependency lockfile synchronized"
+            echo "Updated pnpm-lock.yaml on the draft branch only."
+            echo "No build, model download, Windows install, merge, or production release was performed."
+          } >> "$GITHUB_STEP_SUMMARY"
