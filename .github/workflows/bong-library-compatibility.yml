@@ -5,6 +5,7 @@ on:
     branches:
       - bong/github-actions-migration-20261009
     paths:
+      - 'packages/plugin-sdk/**'
       - 'packages/provider-inference/**'
       - 'packages/stage-ui/**'
       - 'packages/pipelines-audio/**'
