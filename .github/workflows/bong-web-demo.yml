@@ -55,11 +55,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Exclude oversized non-page assets from disposable UI preview
+      - name: Enforce temporary-account static asset limits for UI preview
         shell: bash
         run: |
           set -euo pipefail
-          echo "Preview static assets above 24 MiB (Cloudflare limit is 25 MiB per file):"
+          echo "Temporary Cloudflare preview: excluding binary assets over 5 MB (5 MiB limit):"
           while IFS= read -r -d '' asset; do
             case "$asset" in
               *.html|*.js|*.css)
@@ -71,8 +71,14 @@ jobs:
                 rm -- "$asset"
                 ;;
             esac
-          done < <(find apps/stage-web/dist -type f -size +23M -print0)
+          done < <(find apps/stage-web/dist -type f -size +5000000c -print0)
           test -s apps/stage-web/dist/index.html
+          asset_count="$(find apps/stage-web/dist -type f | wc -l)"
+          echo "Preview static asset count: $asset_count (temporary limit: 1000)"
+          if (( asset_count > 1000 )); then
+            echo "::error::Too many preview assets for a temporary account: $asset_count"
+            exit 1
+          fi
       - name: Upload static files to temporary Cloudflare account
         shell: bash
         run: |
