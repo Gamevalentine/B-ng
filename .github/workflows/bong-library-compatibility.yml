@@ -8,6 +8,7 @@ on:
       - 'packages/plugin-sdk/**'
       - 'packages/provider-inference/**'
       - 'packages/stage-ui/**'
+      - 'packages/stage-layouts/**'
       - 'packages/stage-shared/**'
       - 'packages/stage-ui-live2d/**'
       - 'packages/pipelines-audio/**'
