@@ -1,24 +1,23 @@
 <script setup lang="ts">
 /**
- * Transitional status display for draft GitHub compatibility builds.
- * This deliberately does NOT create another microphone host or change
- * BÔNG's existing Sherpa B2 capture logic. Restore the native Windows
- * hearing indicator after exact source parity is available.
+ * Temporary indicator for draft CI compatibility.
+ * Reads the existing BÔNG hearing configuration only. This does not create
+ * a microphone host, enable capture, or modify Sherpa B2. The real Windows
+ * indicator must be synchronized from the original source before release.
  */
 import { storeToRefs } from 'pinia'
 import { useHearingStore } from '../../../stores/modules/hearing'
 
 defineProps<{ align?: 'start' | 'center' }>()
-const { error } = storeToRefs(useHearingStore())
+const { configured } = storeToRefs(useHearingStore())
 </script>
 
 <template>
   <div
-    v-if="error"
+    v-if="!configured"
     role="status"
-    aria-live="polite"
-    :class="['rounded-lg bg-red-500/10 p-2 text-xs text-red-500', align === 'center' && 'text-center']"
+    :class="['rounded-lg bg-amber-500/10 p-2 text-xs text-amber-600', align === 'center' && 'text-center']"
   >
-    {{ error }}
+    Chưa cấu hình nhận diện tiếng nói.
   </div>
 </template>
