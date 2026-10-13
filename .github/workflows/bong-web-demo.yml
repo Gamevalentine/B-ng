@@ -12,6 +12,10 @@ on:
       - 'package.json'
       - '.github/workflows/bong-web-demo.yml'
 
+concurrency:
+  group: bong-web-demo-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -33,6 +37,24 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Build web and dependent packages
         run: pnpm run build:web
+      - name: Install Chromium for real browser QA
+        run: pnpm exec playwright install chromium --with-deps
+      - name: Test BÔNG web on desktop and mobile (headless Chromium)
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm -C apps/stage-web exec vite preview --host 127.0.0.1 --port 4173 --strictPort > /tmp/bong-vite-preview.log 2>&1 &
+          server_pid="$!"
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          node apps/stage-web/scripts/bong-web-smoke.mjs
+      - name: Save screenshots and browser QA report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bong-web-browser-qa
+          path: bong-web-smoke-results/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Archive web preview files (not a public deployment)
         uses: actions/upload-artifact@v4
         with:
