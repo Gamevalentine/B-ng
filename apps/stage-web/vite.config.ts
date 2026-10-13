@@ -38,6 +38,8 @@ function hasFlagEnableMkcert(): boolean {
 }
 
 export default defineConfig({
+  // Only the GitHub Pages build uses the repository subpath. Cloudflare and local web builds remain at /.
+  base: env.BONG_PAGES_BASE_PATH || '/',
   optimizeDeps: {
     exclude: [
       // Internal Packages
