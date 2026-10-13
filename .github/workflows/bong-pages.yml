@@ -1,0 +1,100 @@
+name: BONG Stable GitHub Pages Preview
+
+on:
+  push:
+    branches:
+      - bong-web-demo
+    paths:
+      - 'apps/stage-web/**'
+      - 'apps/stage-tamagotchi/src/renderer/public/bong-*.webp'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/bong-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: bong-stable-pages-preview
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and browser QA for GitHub Pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install project dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build BÔNG using repository-relative URLs
+        run: pnpm run build:web
+        env:
+          BONG_PAGES_BASE_PATH: '/B-ng/'
+          VITE_ENABLE_POSTHOG: 'false'
+      - name: Install Chromium for browser QA
+        run: pnpm exec playwright install chromium --with-deps
+      - name: Smoke test BÔNG from its future /B-ng/ path
+        shell: bash
+        env:
+          BONG_SMOKE_URL: 'http://127.0.0.1:4173/B-ng/'
+        run: |
+          set -euo pipefail
+          pnpm -C apps/stage-web exec vite preview --host 127.0.0.1 --port 4173 --strictPort > /tmp/bong-pages-vite.log 2>&1 &
+          server_pid="$!"
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          node apps/stage-web/scripts/bong-web-smoke.mjs
+      - name: Archive screenshots and QA report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bong-pages-browser-qa
+          path: bong-web-smoke-results/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Remove developer-only source maps from public site
+        shell: bash
+        run: |
+          set -euo pipefail
+          find apps/stage-web/dist -type f -name '*.map' -delete
+          test -s apps/stage-web/dist/index.html
+          # GitHub Pages serves 404.html as the SPA fallback for client-side navigation.
+          cp apps/stage-web/dist/index.html apps/stage-web/dist/404.html
+          touch apps/stage-web/dist/.nojekyll
+      - name: Package GitHub Pages website
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: apps/stage-web/dist/
+
+  deploy:
+    name: Publish stable HTTPS website
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy_pages.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    steps:
+      - name: Publish to GitHub Pages
+        id: deploy_pages
+        uses: actions/deploy-pages@v4
+      - name: Show website URL
+        run: |
+          echo "BÔNG website: ${{ steps.deploy_pages.outputs.page_url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "This is a stage/UI preview, not the Windows/Mai Chi/Sherpa production runtime." >> "$GITHUB_STEP_SUMMARY"
