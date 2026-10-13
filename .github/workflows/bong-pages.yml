@@ -79,7 +79,7 @@ jobs:
           BONG_SMOKE_URL: 'http://127.0.0.1:4173/B-ng/'
         run: |
           set -euo pipefail
-          pnpm -C apps/stage-web exec vite preview --host 127.0.0.1 --port 4173 --strictPort > /tmp/bong-pages-vite.log 2>&1 &
+          node apps/stage-web/scripts/bong-pages-static-preview.mjs > /tmp/bong-pages-static-server.log 2>&1 &
           server_pid="$!"
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
           node apps/stage-web/scripts/bong-web-smoke.mjs
