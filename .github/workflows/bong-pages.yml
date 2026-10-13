@@ -41,12 +41,36 @@ jobs:
       - name: Install project dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Build BÔNG using repository-relative URLs
-        run: pnpm run build:web
+        # Turbo defaults to strict environment filtering. Forward BONG_PAGES_BASE_PATH
+        # and VITE_BONG_* to the actual Vite build, not just the outer shell.
+        run: pnpm exec turbo run build -F @proj-airi/stage-web --env-mode=loose
         env:
           BONG_PAGES_BASE_PATH: '/B-ng/'
           VITE_ENABLE_POSTHOG: 'false'
           VITE_BONG_UI_PREVIEW: 'true'
           VITE_BONG_PAGES: 'true'
+      - name: Verify GitHub Pages asset paths before testing
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs'
+          const html = readFileSync('apps/stage-web/dist/index.html', 'utf8')
+          const entry = html.match(/<script\s+type="module"[^>]*src="([^"]+)"/)
+          const style = html.match(/<link\s+rel="stylesheet"[^>]*href="([^"]+)"/)
+          if (!entry?.[1]?.startsWith('/B-ng/assets/') || !style?.[1]?.startsWith('/B-ng/assets/')) {
+            console.error('Build is unsafe for GitHub Pages: JavaScript/CSS are not under /B-ng/assets/.')
+            console.error('Script:', entry?.[1] ?? '(missing)')
+            console.error('Stylesheet:', style?.[1] ?? '(missing)')
+            process.exit(1)
+          }
+          const bad = [...html.matchAll(/(?:src|href)="(\/(?!B-ng\/)[^"]+)"/g)].map(match => match[1])
+          if (bad.length) {
+            console.error('Unprefixed public asset paths:', bad.slice(0, 12))
+            process.exit(1)
+          }
+          console.log('PASS: BÔNG script, styles, and public paths are prefixed /B-ng/.')
+          NODE
       - name: Install Chromium for browser QA
         run: pnpm exec playwright install chromium --with-deps
       - name: Smoke test BÔNG from its future /B-ng/ path
