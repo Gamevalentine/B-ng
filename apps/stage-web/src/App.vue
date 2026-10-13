@@ -130,7 +130,10 @@ onMounted(async () => {
   if (!authStore.isAuthenticated)
     await removeAuthenticationProviderConfiguration()
 
-  if (onboardingStore.needsOnboarding) {
+  // UI-only preview should never force account creation. The user may open
+  // provider setup manually later; we do not persist a skipped flag or touch
+  // any Windows/Electron onboarding behavior.
+  if (onboardingStore.needsOnboarding && import.meta.env.VITE_BONG_UI_PREVIEW !== 'true') {
     onboardingStore.showingSetup = true
   }
 
