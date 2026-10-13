@@ -19,6 +19,8 @@ import { useSettings, useSettingsAudioDevice } from '@proj-airi/stage-ui/stores/
 import { breakpointsTailwind, useBreakpoints, useMouse } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from 'vue'
+import bongLogoUrl from '../../../stage-tamagotchi/src/renderer/public/bong-logo.webp?url'
+import bongMascotUrl from '../../../stage-tamagotchi/src/renderer/public/bong-mascot.webp?url'
 
 const paused = ref(false)
 
@@ -211,6 +213,15 @@ const cursorPosition = computed(() => ({
       <div class="px-0 py-1 md:px-3 md:py-3" w-full gap-2>
         <Header class="hidden md:flex" />
         <MobileHeader class="flex md:hidden" />
+        <!-- Brand assets are reused from the BÔNG desktop source, not recreated mock artwork. -->
+        <div class="pointer-events-none absolute left-3 top-16 z-20 flex items-center gap-2 rounded-2xl bg-black/65 px-3 py-2 text-white shadow-lg backdrop-blur-sm md:left-6 md:top-20" data-testid="bong-web-preview-mark">
+          <img :src="bongLogoUrl" alt="Logo BÔNG" class="h-9 w-9 object-contain" data-testid="bong-original-logo">
+          <div class="text-left">
+            <div class="text-sm font-bold tracking-wide">BÔNG</div>
+            <div class="text-[10px] opacity-80">Bản web thử nghiệm · chưa phải bản Windows</div>
+          </div>
+          <img :src="bongMascotUrl" alt="Linh vật BÔNG gốc" class="h-9 w-9 rounded-lg object-contain" data-testid="bong-original-mascot">
+        </div>
       </div>
       <!-- page -->
       <div relative flex="~ 1 row gap-y-0 gap-x-2 <md:col">
