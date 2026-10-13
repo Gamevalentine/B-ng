@@ -76,6 +76,8 @@ jobs:
           # GitHub Pages serves 404.html as the SPA fallback for client-side navigation.
           cp apps/stage-web/dist/index.html apps/stage-web/dist/404.html
           touch apps/stage-web/dist/.nojekyll
+      - name: Confirm GitHub Pages site configuration
+        uses: actions/configure-pages@v5
       - name: Package GitHub Pages website
         uses: actions/upload-pages-artifact@v4
         with:
