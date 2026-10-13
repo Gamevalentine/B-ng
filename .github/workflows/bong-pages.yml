@@ -46,6 +46,7 @@ jobs:
           BONG_PAGES_BASE_PATH: '/B-ng/'
           VITE_ENABLE_POSTHOG: 'false'
           VITE_BONG_UI_PREVIEW: 'true'
+          VITE_BONG_PAGES: 'true'
       - name: Install Chromium for browser QA
         run: pnpm exec playwright install chromium --with-deps
       - name: Smoke test BÔNG from its future /B-ng/ path
