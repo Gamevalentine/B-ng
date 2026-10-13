@@ -2,15 +2,6 @@ name: BONG web demo preview (temporary)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [bong-web-demo]
-    paths:
-      - 'apps/stage-web/**'
-      - 'packages/**'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'package.json'
-      - '.github/workflows/bong-web-demo.yml'
 
 concurrency:
   group: bong-web-demo-${{ github.ref }}
