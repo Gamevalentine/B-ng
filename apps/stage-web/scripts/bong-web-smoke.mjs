@@ -46,7 +46,7 @@ try {
     const assetErrors = []
     page.on('pageerror', error => pageErrors.push(error.message))
     page.on('response', (response) => {
-      if (response.status() >= 400 && new URL(response.url()).origin === baseURL)
+      if (response.status() >= 400 && new URL(response.url()).origin === new URL(baseURL).origin)
         assetErrors.push({ status: response.status(), path: new URL(response.url()).pathname })
     })
 
