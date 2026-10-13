@@ -54,6 +54,8 @@ try {
       viewport: item.name,
       passed: false,
       title: '',
+      headerText: '',
+      landingURL: '',
       brandingVisible: false,
       brandAssetsLoaded: false,
       stageCanvasCount: 0,
@@ -65,7 +67,12 @@ try {
       const response = await page.goto(baseURL, { waitUntil: 'domcontentloaded', timeout: 45000 })
       if (!response?.ok())
         throw new Error('Entry HTML did not return HTTP success')
+      result.landingURL = page.url()
+      result.title = await page.title()
       await page.locator('[data-testid="bong-web-preview-mark"]').waitFor({ state: 'visible', timeout: 30000 })
+      const header = page.locator('[data-testid="bong-web-header"]:visible').first()
+      await header.waitFor({ state: 'visible', timeout: 10000 })
+      result.headerText = (await header.innerText()).trim()
       await page.waitForTimeout(5000)
       result.title = await page.title()
       result.brandingVisible = await page.locator('[data-testid="bong-web-preview-mark"]').isVisible()
@@ -75,7 +82,7 @@ try {
       result.stageCanvasCount = await page.locator('canvas').count()
       result.errors = pageErrors.slice(0, 10)
       result.missingAssets = assetErrors.slice(0, 10)
-      if (!result.title.includes('BÔNG') || !result.brandingVisible || !result.brandAssetsLoaded)
+      if (!result.title.includes('BÔNG') || !result.headerText.includes('BÔNG') || result.headerText.includes('AIRI') || !result.brandingVisible || !result.brandAssetsLoaded)
         throw new Error('BÔNG title/branding or desktop-source image assets did not load')
       // Canvas presence and JS errors are measured separately: a canvas is not proof
       // that the original BÔNG Live2D rig/voice implementation is operational.
@@ -84,6 +91,11 @@ try {
     catch (error) {
       failed = true
       result.failure = String(error)
+      result.title ||= await page.title().catch(() => '')
+      result.landingURL ||= page.url()
+      result.errors = pageErrors.slice(0, 10)
+      result.missingAssets = assetErrors.slice(0, 10)
+      result.bodyExcerpt = await page.locator('body').innerText().then(text => text.slice(0, 500)).catch(() => '')
     }
     finally {
       await page.screenshot({ path: `${targetDir}/${item.name}.png`, fullPage: true }).catch(() => {})
