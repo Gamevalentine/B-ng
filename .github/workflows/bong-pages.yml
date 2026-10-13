@@ -87,8 +87,9 @@ jobs:
     name: Publish stable HTTPS website
     runs-on: ubuntu-latest
     needs: build
+    # Deploy preview branch without modifying rules on GitHub's protected github-pages environment.
     environment:
-      name: github-pages
+      name: bong-pages-preview
       url: ${{ steps.deploy_pages.outputs.page_url }}
     permissions:
       pages: write
