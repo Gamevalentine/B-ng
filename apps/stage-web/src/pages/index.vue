@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import Header from '@proj-airi/stage-layouts/components/Layouts/Header.vue'
 import InteractiveArea from '@proj-airi/stage-layouts/components/Layouts/InteractiveArea.vue'
-import MobileHeader from '@proj-airi/stage-layouts/components/Layouts/MobileHeader.vue'
 import MobileInteractiveArea from '@proj-airi/stage-layouts/components/Layouts/MobileInteractiveArea.vue'
 import workletUrl from '@proj-airi/stage-ui/workers/vad/process.worklet?worker&url'
 
@@ -19,6 +17,7 @@ import { useSettings, useSettingsAudioDevice } from '@proj-airi/stage-ui/stores/
 import { breakpointsTailwind, useBreakpoints, useMouse } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from 'vue'
+import BongHeader from '../components/BongHeader.vue'
 import bongLogoUrl from '../../../stage-tamagotchi/src/renderer/public/bong-logo.webp?url'
 import bongMascotUrl from '../../../stage-tamagotchi/src/renderer/public/bong-mascot.webp?url'
 
@@ -211,8 +210,8 @@ const cursorPosition = computed(() => ({
     >
       <!-- header -->
       <div class="px-0 py-1 md:px-3 md:py-3" w-full gap-2>
-        <Header class="hidden md:flex" />
-        <MobileHeader class="flex md:hidden" />
+        <BongHeader class="hidden md:flex" />
+        <BongHeader mobile class="flex md:hidden" />
         <!-- Brand assets are reused from the BÔNG desktop source, not recreated mock artwork. -->
         <div class="pointer-events-none absolute left-3 top-16 z-20 flex items-center gap-2 rounded-2xl bg-black/65 px-3 py-2 text-white shadow-lg backdrop-blur-sm md:left-6 md:top-20" data-testid="bong-web-preview-mark">
           <img :src="bongLogoUrl" alt="Logo BÔNG" class="h-9 w-9 object-contain" data-testid="bong-original-logo">
