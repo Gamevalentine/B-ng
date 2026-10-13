@@ -46,7 +46,11 @@ if (import.meta.env.DEV)
 const routeRecords = setupLayouts(routes as RouteRecordRaw[])
 
 let router: Router
-if (isEnvTruthy(import.meta.env.VITE_APP_TARGET_HUGGINGFACE_SPACE))
+// The GitHub Pages site lives below /B-ng/ and has no history fallback at its
+// origin root. Hash routing prevents a first visit from rendering [...all].vue.
+if (import.meta.env.VITE_BONG_PAGES === 'true')
+  router = createRouter({ routes: routeRecords, history: createWebHashHistory(import.meta.env.BASE_URL) })
+else if (isEnvTruthy(import.meta.env.VITE_APP_TARGET_HUGGINGFACE_SPACE))
   router = createRouter({ routes: routeRecords, history: createWebHashHistory() })
 else
   router = createRouter({ routes: routeRecords, history: createWebHistory(import.meta.env.BASE_URL) })
