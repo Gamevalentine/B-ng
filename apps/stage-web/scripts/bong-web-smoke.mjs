@@ -44,6 +44,11 @@ try {
     const page = await context.newPage()
     const pageErrors = []
     const assetErrors = []
+    const aiApiCalls = []
+    page.on('request', request => {
+      if (request.url().startsWith('https://generativelanguage.googleapis.com/'))
+        aiApiCalls.push(request.url())
+    })
     page.on('pageerror', error => pageErrors.push(error.message))
     page.on('response', (response) => {
       if (response.status() >= 400 && new URL(response.url()).origin === new URL(baseURL).origin)
@@ -59,6 +64,8 @@ try {
       brandingVisible: false,
       brandAssetsLoaded: false,
       stageCanvasCount: 0,
+      textChatPassed: false,
+      aiApiCallsWithoutKey: 0,
       errors: [],
       missingAssets: [],
     }
@@ -80,9 +87,24 @@ try {
         images.length === 2 && images.every(image => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0))
       result.brandAssetsLoaded = imageReady
       result.stageCanvasCount = await page.locator('canvas').count()
+      // Giai đoạn 2: exercise actual browser text inputs without calling an AI provider.
+      const textInput = page.locator('[data-testid="bong-chat-input"]')
+      await textInput.waitFor({ state: 'visible', timeout: 10000 })
+      await textInput.fill('Xin chào')
+      await page.locator('[data-testid="bong-chat-send"]').click()
+      await page.locator('[data-testid="bong-chat-messages"]').getByText('Phản hồi mô phỏng · không phải AI').waitFor({ state: 'visible', timeout: 10000 })
+      await page.locator('[data-testid="bong-mode-gemini"]').click()
+      await textInput.fill('Xin chào')
+      await page.locator('[data-testid="bong-chat-send"]').click()
+      await page.locator('[data-testid="bong-chat-error"]').getByText(/nhập API key/i).waitFor({ state: 'visible', timeout: 10000 })
+      await page.locator('[data-testid="bong-mode-demo"]').click()
+      result.aiApiCallsWithoutKey = aiApiCalls.length
+      if (result.aiApiCallsWithoutKey !== 0)
+        throw new Error('BÔNG attempted an AI API request without explicit visitor key')
+      result.textChatPassed = true
       result.errors = pageErrors.slice(0, 10)
       result.missingAssets = assetErrors.slice(0, 10)
-      if (!result.title.includes('BÔNG') || !result.headerText.includes('BÔNG') || result.headerText.includes('AIRI') || !result.brandingVisible || !result.brandAssetsLoaded)
+      if (!result.title.includes('BÔNG') || !result.headerText.includes('BÔNG') || result.headerText.includes('AIRI') || !result.brandingVisible || !result.brandAssetsLoaded || !result.textChatPassed || result.errors.length || result.missingAssets.length)
         throw new Error('BÔNG title/branding or desktop-source image assets did not load')
       // Canvas presence and JS errors are measured separately: a canvas is not proof
       // that the original BÔNG Live2D rig/voice implementation is operational.
