@@ -17,6 +17,8 @@ export interface GenerateBongReplyOptions {
 }
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta'
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.1-flash-lite'
+const SUPPORTED_MODELS = new Set(['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.5-flash'])
 const SYSTEM_INSTRUCTION = 'Bạn là BÔNG, trợ lý AI thân thiện và hữu ích. Ưu tiên giao tiếp bằng tiếng Việt tự nhiên, rõ ràng và ngắn gọn. Đây là bản thử nghiệm trên trình duyệt, chưa có khả năng điều khiển máy tính, quan sát màn hình hay truy cập dữ liệu cá nhân. Không được tuyên bố rằng bạn đã thực hiện thao tác trên PC.'
 
 /** This is explicitly a scripted UI test, not an AI completion. */
@@ -33,18 +35,24 @@ export async function generateBongReply(options: GenerateBongReplyOptions): Prom
 
   if (!key)
     throw new Error('Bạn cần nhập API key cá nhân để dùng AI thật.')
-  if (!/^gemini-[a-zA-Z0-9.-]{3,70}$/.test(model))
+  if (!SUPPORTED_MODELS.has(model))
     throw new Error('Tên mô hình không hợp lệ.')
   if (!history.length || history[history.length - 1]?.role !== 'user')
     throw new Error('Hội thoại cần có tin nhắn người dùng.')
 
-  const contents = history.slice(-12).map(turn => ({
+  // Discard stray leading model turns and cap the session sent to the provider.
+  const recentHistory = history.slice(-12)
+  while (recentHistory[0]?.role === 'model')
+    recentHistory.shift()
+  const contents = recentHistory.map(turn => ({
     role: turn.role,
     parts: [{ text: turn.text.slice(0, 4000) }],
   }))
 
   // Key is carried in the request header, NEVER in URL/query/logs/storage.
-  const response = await fetchImpl(`${GEMINI_ENDPOINT}/models/${model}:generateContent`, {
+  let response: Response
+  try {
+    response = await fetchImpl(`${GEMINI_ENDPOINT}/models/${model}:generateContent`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -58,7 +66,15 @@ export async function generateBongReply(options: GenerateBongReplyOptions): Prom
     signal,
     referrerPolicy: 'no-referrer',
     cache: 'no-store',
+    mode: 'cors',
   })
+  }
+  catch (cause) {
+    if (signal?.aborted)
+      throw new Error('Yêu cầu đã bị hủy hoặc quá thời gian chờ.')
+    // Do not echo exceptions: browser/network errors might contain sensitive URLs.
+    throw new Error('Không kết nối được Gemini từ trình duyệt. Kiểm tra mạng hoặc chính sách CORS của Google API.', { cause })
+  }
 
   if (!response.ok) {
     if (response.status === 400 || response.status === 401)
@@ -69,6 +85,8 @@ export async function generateBongReply(options: GenerateBongReplyOptions): Prom
       throw new Error('Không tìm thấy mô hình Gemini đã chọn.')
     if (response.status === 429)
       throw new Error('Đã tới hạn mức API Gemini. BÔNG không tự chuyển sang dịch vụ trả phí.')
+    if (response.status >= 500)
+      throw new Error('Máy chủ Gemini đang bận hoặc gặp sự cố. Hãy thử lại sau.')
     throw new Error(`Gemini API gặp lỗi HTTP ${response.status}.`)
   }
 
