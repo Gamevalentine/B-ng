@@ -21,8 +21,8 @@ export interface GenerateBongReplyOptions {
 }
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta'
-export const DEFAULT_GEMINI_MODEL = 'gemini-3.1-flash-lite'
-const SUPPORTED_MODELS = new Set(['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.5-flash'])
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite'
+const SUPPORTED_MODELS = new Set(['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.5-flash'])
 const SYSTEM_INSTRUCTION = 'Bạn là BÔNG, trợ lý AI thân thiện và hữu ích. Ưu tiên giao tiếp bằng tiếng Việt tự nhiên, rõ ràng và ngắn gọn. Đây là bản thử nghiệm trên trình duyệt, chưa có khả năng điều khiển máy tính, quan sát màn hình hay truy cập dữ liệu cá nhân. Không được tuyên bố rằng bạn đã thực hiện thao tác trên PC.'
 
 /** This is explicitly a scripted UI test, not an AI completion. */
