@@ -92,4 +92,45 @@ await assert.rejects(
   /không tìm thấy mô hình/i,
 )
 
-console.log('PASS: BÔNG real AI request contract, multi-turn context, retry-safe errors, API key protection')
+let transientCallCount = 0
+let retryCount = 0
+const transientResponse = await generateBongReply({
+  apiKey: 'test-key-never-real',
+  model: DEFAULT_GEMINI_MODEL,
+  history: [{ role: 'user', text: 'Bông ơi, hôm nay em thế nào?' }],
+  waitBeforeRetry: async (ms) => {
+    assert.ok(ms >= 1100 && ms < 1500)
+  },
+  onRetry: status => { assert.equal(status, 503); retryCount++ },
+  fetchImpl: async () => {
+    transientCallCount++
+    return transientCallCount === 1
+      ? new Response('{}', { status: 503 })
+      : new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Em vẫn ổn ạ!' }] } }] }), { status: 200 })
+  },
+})
+assert.equal(transientResponse, 'Em vẫn ổn ạ!')
+assert.equal(transientCallCount, 2)
+assert.equal(retryCount, 1)
+
+let repeated503 = 0
+await assert.rejects(generateBongReply({
+  apiKey: 'test',
+  model: DEFAULT_GEMINI_MODEL,
+  history: [{ role: 'user', text: 'Xin chào' }],
+  waitBeforeRetry: async () => {},
+  fetchImpl: async () => { repeated503++; return new Response('{}', { status: 503 }) },
+}), /HTTP 503.*thử lại một lần/i)
+assert.equal(repeated503, 2, '503 must never retry indefinitely')
+
+let quotaRequests = 0
+await assert.rejects(generateBongReply({
+  apiKey: 'test',
+  model: DEFAULT_GEMINI_MODEL,
+  history: [{ role: 'user', text: 'Xin chào' }],
+  waitBeforeRetry: async () => { throw new Error('429 must not sleep/retry') },
+  fetchImpl: async () => { quotaRequests++; return new Response('{}', { status: 429 }) },
+}), /HTTP 429/)
+assert.equal(quotaRequests, 1, 'No automatic retries or billable model switch on 429')
+
+console.log('PASS: BÔNG multi-turn + one bounded 503 retry + no quota retries + key protection')
