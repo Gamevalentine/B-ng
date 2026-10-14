@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onUnmounted, ref } from 'vue'
-import { generateBongReply, offlinePreviewReply } from '../lib/bong-chat'
+import { DEFAULT_GEMINI_MODEL, generateBongReply, offlinePreviewReply } from '../lib/bong-chat'
 import type { BongTurn } from '../lib/bong-chat'
 
 interface DisplayTurn extends BongTurn {
@@ -10,7 +10,8 @@ interface DisplayTurn extends BongTurn {
 const mode = ref<'demo' | 'gemini'>('demo')
 const input = ref('')
 const apiKey = ref('') // Deliberately ephemeral; do NOT save to localStorage, URL or server.
-const model = ref('gemini-2.5-flash-lite')
+const model = ref(DEFAULT_GEMINI_MODEL)
+const connected = ref(false)
 const messages = ref<DisplayTurn[]>([])
 const error = ref('')
 const busy = ref(false)
@@ -28,6 +29,7 @@ function selectMode(value: 'demo' | 'gemini') {
     return
   mode.value = value
   error.value = ''
+  connected.value = false
   messages.value = []
 }
 
@@ -36,6 +38,7 @@ function clearConversation() {
     return
   messages.value = []
   error.value = ''
+  connected.value = false
 }
 
 async function sendMessage() {
@@ -49,7 +52,8 @@ async function sendMessage() {
 
   error.value = ''
   input.value = ''
-  messages.value.push({ id: nextId++, role: 'user', text, demo: false })
+  const userMessageId = nextId++
+  messages.value.push({ id: userMessageId, role: 'user', text, demo: false })
   await scrollToEnd()
 
   if (mode.value === 'demo') {
@@ -69,9 +73,14 @@ async function sendMessage() {
       signal: controller.signal,
     })
     messages.value.push({ id: nextId++, role: 'model', text: reply, demo: false })
+    connected.value = true
     await scrollToEnd()
   }
   catch (err) {
+    connected.value = false
+    // A failed user turn must not poison the provider history or get silently lost.
+    messages.value = messages.value.filter(item => item.id !== userMessageId)
+    input.value = text
     error.value = controller?.signal.aborted
       ? 'Yêu cầu quá thời gian 35 giây. Hãy thử lại.'
       : (err instanceof Error ? err.message : 'Không thể kết nối AI.')
@@ -148,11 +157,17 @@ onUnmounted(() => {
         <div class="flex items-center gap-2">
           <label class="font-medium" for="bong-gemini-model">Mô hình</label>
           <select id="bong-gemini-model" v-model="model" class="bong-input min-w-0 flex-1 rounded-lg px-2 py-2" data-testid="bong-model">
-            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite</option>
-            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+            <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite (khuyến nghị)</option>
+            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (tài khoản cũ)</option>
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash (tài khoản cũ)</option>
           </select>
         </div>
-        <p class="opacity-75">BÔNG chỉ gửi tin nhắn và key trực tiếp tới Google API. Hạn mức và phí (nếu có) phụ thuộc tài khoản Google của bạn; BÔNG không tự bật dịch vụ trả phí.</p>
+        <p class="opacity-75">BÔNG gửi yêu cầu trực tiếp tới Google Gemini. Key chỉ nằm trong bộ nhớ của tab (nhưng vẫn hiện trong yêu cầu mạng của trình duyệt). <strong>Chỉ thử bằng key riêng có giới hạn và không bật thanh toán nếu bạn muốn miễn phí.</strong></p>
+        <div class="flex items-center justify-between gap-2">
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="font-semibold underline">Tạo key trong Google AI Studio ↗</a>
+          <span v-if="connected" class="font-semibold text-green-700" data-testid="bong-ai-connected">AI đã trả lời</span>
+          <span v-else class="opacity-70" data-testid="bong-ai-unverified">Chưa xác minh AI thật</span>
+        </div>
       </div>
       <p v-else class="text-xs opacity-75" data-testid="bong-demo-notice">
         Chế độ mô phỏng miễn phí: phản hồi mẫu, <strong>không phải trí tuệ nhân tạo</strong>.
