@@ -18,9 +18,11 @@ import { breakpointsTailwind, useBreakpoints, useMouse } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import BongHeader from '../components/BongHeader.vue'
+import BongTextChat from '../components/BongTextChat.vue'
 import bongLogoUrl from '../../../stage-tamagotchi/src/renderer/public/bong-logo.webp?url'
 import bongMascotUrl from '../../../stage-tamagotchi/src/renderer/public/bong-mascot.webp?url'
 
+const isBongTextPreview = import.meta.env.VITE_BONG_UI_PREVIEW === 'true'
 const paused = ref(false)
 
 function handleSettingsOpen(open: boolean) {
@@ -240,13 +242,15 @@ const cursorPosition = computed(() => ({
             :paused="paused"
           />
         </div>
-        <InteractiveArea v-if="!isMobile" h="85dvh" absolute right-4 flex flex-1 flex-col max-w="500px" min-w="30%" />
+        <BongTextChat v-if="isBongTextPreview && !isMobile" data-testid="bong-chat-desktop" class="absolute bottom-4 right-4 z-30 flex h-[82dvh] w-[min(34vw,510px)] min-w-[360px] flex-col" />
+        <InteractiveArea v-else-if="!isMobile" h="85dvh" absolute right-4 flex flex-1 flex-col max-w="500px" min-w="30%" />
       </div>
       <HoloCoupon />
     </div>
     <Teleport to="body">
+      <BongTextChat v-if="isBongTextPreview && isMobile" class="fixed bottom-2 right-2 z-50 flex h-[55dvh] w-[calc(100vw-16px)] flex-col" data-testid="bong-chat-mobile" />
       <MobileInteractiveArea
-        v-if="isMobile"
+        v-else-if="isMobile"
         @settings-open="handleSettingsOpen"
         @stage-viewport-change="stageViewport = $event"
       />
