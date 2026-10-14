@@ -14,6 +14,10 @@ export interface GenerateBongReplyOptions {
   history: BongTurn[]
   signal?: AbortSignal
   fetchImpl?: typeof fetch
+  /** Called before one bounded retry after HTTP 500/502/503/504. */
+  onRetry?: (status: number) => void
+  /** Test injection; production uses an abort-aware backoff wait. */
+  waitBeforeRetry?: (ms: number) => Promise<void>
 }
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta'
@@ -29,8 +33,36 @@ export function offlinePreviewReply(input: string): string {
   return 'BÔNG đã nhận được tin nhắn của bạn. Đây chỉ là phản hồi mô phỏng giao diện, chưa xử lý bằng mô hình AI. Hãy chọn “AI thật” để nhận câu trả lời thực sự.'
 }
 
+/** Wait before retry without holding on to an aborted request. */
+async function waitForServer(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted)
+    throw new Error('Yêu cầu đã bị hủy hoặc quá thời gian chờ.')
+  await new Promise<void>((resolve, reject) => {
+    let finished = false
+    const cleanup = () => {
+      if (finished)
+        return false
+      finished = true
+      signal?.removeEventListener('abort', abort)
+      clearTimeout(timer)
+      return true
+    }
+    const abort = () => {
+      if (cleanup())
+        reject(new Error('Yêu cầu đã bị hủy hoặc quá thời gian chờ.'))
+    }
+    const timer = setTimeout(() => {
+      if (cleanup())
+        resolve()
+    }, ms)
+    signal?.addEventListener('abort', abort, { once: true })
+    if (signal?.aborted)
+      abort()
+  })
+}
+
 export async function generateBongReply(options: GenerateBongReplyOptions): Promise<string> {
-  const { apiKey, model, history, signal, fetchImpl = fetch } = options
+  const { apiKey, model, history, signal, fetchImpl = fetch, onRetry, waitBeforeRetry } = options
   const key = apiKey.trim()
 
   if (!key)
@@ -40,7 +72,6 @@ export async function generateBongReply(options: GenerateBongReplyOptions): Prom
   if (!history.length || history[history.length - 1]?.role !== 'user')
     throw new Error('Hội thoại cần có tin nhắn người dùng.')
 
-  // Discard stray leading model turns and cap the session sent to the provider.
   const recentHistory = history.slice(-12)
   while (recentHistory[0]?.role === 'model')
     recentHistory.shift()
@@ -48,53 +79,74 @@ export async function generateBongReply(options: GenerateBongReplyOptions): Prom
     role: turn.role,
     parts: [{ text: turn.text.slice(0, 4000) }],
   }))
-
-  // Key is carried in the request header, NEVER in URL/query/logs/storage.
-  let response: Response
-  try {
-    response = await fetchImpl(`${GEMINI_ENDPOINT}/models/${model}:generateContent`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': key,
-    },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
-      contents,
-      generationConfig: { maxOutputTokens: 450, temperature: 0.7 },
-    }),
-    signal,
-    referrerPolicy: 'no-referrer',
-    cache: 'no-store',
-    mode: 'cors',
+  const requestBody = JSON.stringify({
+    systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+    contents,
+    generationConfig: { maxOutputTokens: 450, temperature: 0.7 },
   })
-  }
-  catch (cause) {
+
+  // Exactly one extra request on transient 5xx errors. Never retry quota
+  // errors (429) or silently switch to a potentially billable model.
+  const transientStatuses = new Set([500, 502, 503, 504])
+  for (let attempt = 0; attempt < 2; attempt++) {
     if (signal?.aborted)
       throw new Error('Yêu cầu đã bị hủy hoặc quá thời gian chờ.')
-    // Do not echo exceptions: browser/network errors might contain sensitive URLs.
-    throw new Error('Không kết nối được Gemini từ trình duyệt. Kiểm tra mạng hoặc chính sách CORS của Google API.', { cause })
+
+    let response: Response
+    try {
+      response = await fetchImpl(`${GEMINI_ENDPOINT}/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': key,
+        },
+        body: requestBody,
+        signal,
+        referrerPolicy: 'no-referrer',
+        cache: 'no-store',
+        mode: 'cors',
+      })
+    }
+    catch {
+      if (signal?.aborted)
+        throw new Error('Yêu cầu đã bị hủy hoặc quá thời gian chờ.')
+      throw new Error('Không kết nối được Gemini từ trình duyệt. Kiểm tra mạng hoặc chính sách CORS của Google API.')
+    }
+
+    if (!response.ok && transientStatuses.has(response.status) && attempt === 0) {
+      onRetry?.(response.status)
+      const delayMs = 1100 + Math.floor(Math.random() * 400)
+      if (waitBeforeRetry)
+        await waitBeforeRetry(delayMs)
+      else
+        await waitForServer(delayMs, signal)
+      continue
+    }
+
+    if (!response.ok) {
+      if (response.status === 400 || response.status === 401)
+        throw new Error('API key hoặc yêu cầu không hợp lệ. Hãy kiểm tra cấu hình Gemini.')
+      if (response.status === 403)
+        throw new Error('Dự án Gemini chưa được cấp quyền. Kiểm tra quyền API hoặc giới hạn tài khoản.')
+      if (response.status === 404)
+        throw new Error('Không tìm thấy mô hình Gemini đã chọn.')
+      if (response.status === 429)
+        throw new Error('Đã tới hạn mức Gemini (HTTP 429). BÔNG không tự thử lại hoặc chuyển sang dịch vụ trả phí.')
+      if (transientStatuses.has(response.status))
+        throw new Error(`Gemini gặp lỗi máy chủ HTTP ${response.status}, BÔNG đã thử lại một lần nhưng chưa thành công. Hãy chờ một chút rồi gửi lại hoặc tự chọn mô hình khác.`)
+      if (response.status >= 500)
+        throw new Error(`Gemini gặp sự cố HTTP ${response.status}. Hãy thử lại sau.`)
+      throw new Error(`Gemini API gặp lỗi HTTP ${response.status}.`)
+    }
+
+    const payload = await response.json() as {
+      candidates?: { content?: { parts?: { text?: string }[] } }[]
+    }
+    const reply = payload.candidates?.[0]?.content?.parts?.map(part => part.text ?? '').join('').trim()
+    if (!reply)
+      throw new Error('Mô hình chưa trả về văn bản. Hãy thử câu hỏi khác.')
+    return reply
   }
 
-  if (!response.ok) {
-    if (response.status === 400 || response.status === 401)
-      throw new Error('API key hoặc yêu cầu không hợp lệ. Hãy kiểm tra cấu hình Gemini.')
-    if (response.status === 403)
-      throw new Error('Dự án Gemini chưa được cấp quyền. Kiểm tra quyền API hoặc giới hạn tài khoản.')
-    if (response.status === 404)
-      throw new Error('Không tìm thấy mô hình Gemini đã chọn.')
-    if (response.status === 429)
-      throw new Error('Đã tới hạn mức API Gemini. BÔNG không tự chuyển sang dịch vụ trả phí.')
-    if (response.status >= 500)
-      throw new Error('Máy chủ Gemini đang bận hoặc gặp sự cố. Hãy thử lại sau.')
-    throw new Error(`Gemini API gặp lỗi HTTP ${response.status}.`)
-  }
-
-  const payload = await response.json() as {
-    candidates?: { content?: { parts?: { text?: string }[] } }[]
-  }
-  const reply = payload.candidates?.[0]?.content?.parts?.map(part => part.text ?? '').join('').trim()
-  if (!reply)
-    throw new Error('Mô hình chưa trả về văn bản. Hãy thử câu hỏi khác.')
-  return reply
+  throw new Error('Gemini chưa trả lời sau khi BÔNG thử lại.')
 }
