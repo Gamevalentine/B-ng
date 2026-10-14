@@ -16,6 +16,7 @@ const model = ref(DEFAULT_GEMINI_MODEL)
 const connected = ref(false)
 const messages = ref<DisplayTurn[]>([])
 const error = ref('')
+const retryNotice = ref('')
 const busy = ref(false)
 const listRef = ref<HTMLElement>()
 const microphoneSupported = ref(false)
@@ -127,6 +128,7 @@ function selectMode(value: 'demo' | 'gemini') {
   speechStatus.value = ''
   mode.value = value
   error.value = ''
+  retryNotice.value = ''
   connected.value = false
   messages.value = []
 }
@@ -138,6 +140,7 @@ function clearConversation() {
   speechStatus.value = ''
   messages.value = []
   error.value = ''
+  retryNotice.value = ''
   connected.value = false
 }
 
@@ -155,6 +158,7 @@ async function sendMessage() {
   }
 
   error.value = ''
+  retryNotice.value = ''
   input.value = ''
   const userMessageId = nextId++
   messages.value.push({ id: userMessageId, role: 'user', text, demo: false })
@@ -175,6 +179,9 @@ async function sendMessage() {
       model: model.value,
       history: messages.value.filter(item => !item.demo).map(({ role, text }) => ({ role, text })),
       signal: controller.signal,
+      onRetry: (status) => {
+        retryNotice.value = `Gemini trả về HTTP ${status}. BÔNG đang đợi ngắn và thử lại đúng một lần...`
+      },
     })
     messages.value.push({ id: nextId++, role: 'model', text: reply, demo: false })
     connected.value = true
@@ -192,6 +199,7 @@ async function sendMessage() {
   }
   finally {
     clearTimeout(timeout)
+    retryNotice.value = ''
     controller = undefined
     busy.value = false
   }
@@ -267,7 +275,7 @@ onUnmounted(() => {
             <option value="gemini-2.5-flash">Gemini 2.5 Flash (tài khoản cũ)</option>
           </select>
         </div>
-        <p class="opacity-75">BÔNG gửi yêu cầu trực tiếp tới Google Gemini. Key chỉ nằm trong bộ nhớ của tab (nhưng vẫn hiện trong yêu cầu mạng của trình duyệt). <strong>Chỉ thử bằng key riêng có giới hạn và không bật thanh toán nếu bạn muốn miễn phí.</strong></p>
+        <p class="opacity-75">BÔNG gửi yêu cầu trực tiếp tới Google Gemini. Key chỉ nằm trong bộ nhớ của tab (nhưng vẫn hiện trong yêu cầu mạng của trình duyệt). <strong>Chỉ thử bằng key riêng có giới hạn và không bật thanh toán nếu bạn muốn miễn phí. Khi máy chủ trả lỗi 5xx, BÔNG có thể tự thử lại đúng một lần bằng cùng mô hình và API key; lần thử này cũng có thể tính vào hạn mức.</strong></p>
         <div class="flex items-center justify-between gap-2">
           <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="font-semibold underline">Tạo key trong Google AI Studio ↗</a>
           <span v-if="connected" class="font-semibold text-green-700" data-testid="bong-ai-connected">AI đã trả lời</span>
@@ -299,6 +307,7 @@ onUnmounted(() => {
 
     <div class="bong-chat-foot flex flex-col gap-2">
       <p v-if="error" role="alert" class="bong-error rounded-lg px-3 py-2 text-xs" data-testid="bong-chat-error">{{ error }}</p>
+      <p v-if="retryNotice" role="status" class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="bong-gemini-retry-notice">{{ retryNotice }}</p>
       <p v-if="speechStatus" role="status" class="text-xs" data-testid="bong-speech-status">{{ speechStatus }}</p>
       <p v-if="interimTranscript" class="text-xs opacity-75" data-testid="bong-speech-interim">Đang nhận diện: {{ interimTranscript }}</p>
       <form class="flex gap-2" @submit.prevent="sendMessage">
