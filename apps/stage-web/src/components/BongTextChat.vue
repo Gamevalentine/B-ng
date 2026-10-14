@@ -340,19 +340,14 @@ onUnmounted(() => {
   <section class="bong-chat flex flex-col overflow-hidden" aria-label="Hội thoại BÔNG" data-testid="bong-text-chat">
     <div class="bong-chat-head flex flex-col gap-2">
       <div class="flex items-center justify-between gap-2">
-        <div>
-          <div class="text-sm font-semibold">Trò chuyện với BÔNG</div>
-          <div class="text-xs opacity-70">Giai đoạn 3B · Nghe và đọc tiếng Việt</div>
+        <strong class="text-sm">BÔNG <span class="font-normal opacity-60">· Trò chuyện</span></strong>
+        <div class="flex items-center gap-1">
+          <button type="button" class="bong-clear rounded-lg px-2 py-1 text-xs"
+            data-testid="bong-settings-toggle" :aria-expanded="settingsExpanded"
+            @click="settingsExpanded = !settingsExpanded">{{ settingsExpanded ? 'Ẩn cài đặt' : '⚙ Cài đặt' }}</button>
+          <button type="button" class="bong-clear rounded-lg px-2 py-1 text-xs"
+            :disabled="busy" data-testid="bong-chat-clear" @click="clearConversation">Xóa</button>
         </div>
-        <button
-          class="bong-clear rounded-lg px-3 py-1 text-xs"
-          type="button"
-          :disabled="busy"
-          data-testid="bong-chat-clear"
-          @click="clearConversation"
-        >
-          Xóa chat
-        </button>
       </div>
       <div class="flex gap-2" role="group" aria-label="Chế độ hội thoại">
         <button
@@ -378,75 +373,69 @@ onUnmounted(() => {
           AI thật · Gemini
         </button>
       </div>
-      <div v-if="mode === 'gemini'" class="flex flex-col gap-2 text-xs">
-        <label for="bong-gemini-key" class="font-medium">API key cá nhân (chỉ lưu trong tab này)</label>
-        <input
-          id="bong-gemini-key"
-          v-model="apiKey"
-          class="bong-input rounded-lg px-3 py-2"
-          type="password"
-          autocomplete="off"
-          spellcheck="false"
-          placeholder="Dán Gemini API key của bạn"
-          data-testid="bong-api-key"
-          aria-label="Gemini API key cá nhân"
-        >
-        <div class="flex items-center gap-2">
-          <label class="font-medium" for="bong-gemini-model">Mô hình</label>
-          <select id="bong-gemini-model" v-model="model" class="bong-input min-w-0 flex-1 rounded-lg px-2 py-2" data-testid="bong-model">
-            <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (khuyến nghị)</option>
-            <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite (đời trước)</option>
-            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (tài khoản cũ)</option>
-            <option value="gemini-2.5-flash">Gemini 2.5 Flash (tài khoản cũ)</option>
+      <div v-if="settingsExpanded" class="bong-settings flex flex-col gap-2 text-xs" data-testid="bong-expanded-settings">
+        <div v-if="mode === 'gemini'" class="flex flex-col gap-2">
+          <label for="bong-gemini-key" class="font-medium">API key Gemini · chỉ trong tab</label>
+          <input id="bong-gemini-key" v-model="apiKey" type="password" autocomplete="off"
+            spellcheck="false" placeholder="Gemini API key cá nhân"
+            class="bong-input rounded-lg px-3 py-2" data-testid="bong-api-key" aria-label="Gemini API key cá nhân">
+          <label for="bong-gemini-model">Mô hình</label>
+          <select id="bong-gemini-model" v-model="model" class="bong-input rounded-lg px-2 py-2" data-testid="bong-model">
+            <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite</option>
+            <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option>
+            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite</option>
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
           </select>
+          <div class="flex justify-between gap-2">
+            <a class="underline" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Lấy key ↗</a>
+            <span v-if="connected" class="text-green-700" data-testid="bong-ai-connected">AI đã trả lời</span>
+            <span v-else class="opacity-70" data-testid="bong-ai-unverified">Chưa kết nối</span>
+          </div>
+          <details class="opacity-75">
+            <summary class="cursor-pointer">Quyền riêng tư và hạn mức API</summary>
+            Key được gửi từ trình duyệt tới Google và có thể xem trong công cụ mạng. Dùng key có hạn mức; không bật thanh toán nếu muốn miễn phí. BÔNG thử lại tối đa một lần khi gặp lỗi 5xx, có thể tính vào hạn mức, không tự đổi mô hình.
+          </details>
         </div>
-        <p class="opacity-75">BÔNG gửi yêu cầu trực tiếp tới Google Gemini. Key chỉ nằm trong bộ nhớ của tab (nhưng vẫn hiện trong yêu cầu mạng của trình duyệt). <strong>Chỉ thử bằng key riêng có giới hạn và không bật thanh toán nếu bạn muốn miễn phí. Khi máy chủ trả lỗi 5xx, BÔNG có thể tự thử lại đúng một lần bằng cùng mô hình và API key; lần thử này cũng có thể tính vào hạn mức. Nếu lỗi HTTP 503 lặp lại, bạn có thể chọn 3.5 Flash-Lite trong danh sách, không cần cấp key mới; BÔNG không tự đổi mô hình.</strong></p>
-        <div class="flex items-center justify-between gap-2">
-          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="font-semibold underline">Tạo key trong Google AI Studio ↗</a>
-          <span v-if="connected" class="font-semibold text-green-700" data-testid="bong-ai-connected">AI đã trả lời</span>
-          <span v-else class="opacity-70" data-testid="bong-ai-unverified">Chưa xác minh AI thật</span>
+        <div class="flex flex-col gap-2 rounded-lg bg-white/70 p-2" data-testid="bong-tts-settings">
+          <div class="flex items-center justify-between">
+            <strong>Giọng đọc</strong>
+            <button type="button" class="bong-clear rounded px-2 py-1" data-testid="bong-tts-refresh" @click="refreshVietnameseVoices">Tải lại</button>
+          </div>
+          <div class="flex items-center gap-2">
+            <select id="bong-tts-voice" v-model="selectedVoiceURI" class="bong-input min-w-0 flex-1 rounded-lg px-2 py-1"
+              aria-label="Chọn giọng đọc" data-testid="bong-tts-voice" :disabled="!browserTtsSupported" @change="stopBongSpeech">
+              <option :value="BONG_SYSTEM_VOICE">Giọng hệ thống (thử nghiệm)</option>
+              <option v-for="voice in vietnameseVoices" :key="voice.uri" :value="voice.uri">{{ voice.name }} ({{ voice.lang }})</option>
+            </select>
+            <select id="bong-tts-rate" v-model.number="ttsRate" class="bong-input w-auto rounded-lg px-1 py-1"
+              aria-label="Tốc độ đọc" data-testid="bong-tts-rate">
+              <option :value="0.9">0.9×</option>
+              <option :value="1">1×</option>
+              <option :value="1.1">1.1×</option>
+            </select>
+          </div>
+          <label class="flex items-center gap-2">
+            <input v-model="autoReadAloud" type="checkbox" data-testid="bong-tts-auto" :disabled="!browserTtsSupported"> Tự đọc sau khi trả lời
+          </label>
+          <p v-if="vietnameseVoices.length === 0" class="text-amber-800" data-testid="bong-tts-unavailable">
+            Chưa có giọng vi-VN; có thể thử giọng hệ thống nhưng phát âm không chuẩn.
+          </p>
+          <details class="opacity-70" data-testid="bong-tts-disclaimer">
+            <summary class="cursor-pointer">Giới hạn giọng đọc</summary>{{ BONG_TTS_NOTICE }}
+          </details>
         </div>
+        <details class="opacity-70">
+          <summary class="cursor-pointer">Micro và quyền riêng tư</summary>
+          Web Speech có thể dùng dịch vụ của Chrome. Chưa phải Sherpa offline; giọng đọc chưa phải Mai Chi và chưa đồng bộ miệng.
+        </details>
       </div>
-      <p v-else class="text-xs opacity-75" data-testid="bong-demo-notice">
-        Chế độ mô phỏng miễn phí: phản hồi mẫu, <strong>không phải trí tuệ nhân tạo</strong>.
+      <p v-if="mode === 'gemini' && !apiKey.trim() && !settingsExpanded" class="text-xs opacity-70">
+        Bấm ⚙ Cài đặt để nhập Gemini API key.
       </p>
-      <div class="flex flex-col gap-2 rounded-lg bg-white/60 p-2 text-xs" data-testid="bong-tts-settings">
-        <div class="flex items-center justify-between gap-2">
-          <strong>Giọng đọc tiếng Việt · trình duyệt</strong>
-          <button type="button" class="bong-clear rounded-lg px-2 py-1" data-testid="bong-tts-refresh" @click="refreshVietnameseVoices">Tải lại giọng</button>
-        </div>
-        <div class="flex items-center gap-2">
-          <label for="bong-tts-voice">Giọng</label>
-          <select
-            id="bong-tts-voice" v-model="selectedVoiceURI"
-            class="bong-input min-w-0 flex-1 rounded-lg px-2 py-1"
-            data-testid="bong-tts-voice"
-            :disabled="!browserTtsSupported || vietnameseVoices.length === 0"
-            @change="stopBongSpeech"
-          >
-            <option v-if="vietnameseVoices.length === 0" value="">Chưa có giọng tiếng Việt</option>
-            <option v-for="voice in vietnameseVoices" :key="voice.uri" :value="voice.uri">{{ voice.name }} ({{ voice.lang }})</option>
-          </select>
-          <label for="bong-tts-rate">Tốc độ</label>
-          <select id="bong-tts-rate" v-model.number="ttsRate" class="bong-input w-auto rounded-lg px-1 py-1" data-testid="bong-tts-rate">
-            <option :value="0.9">0.9×</option>
-            <option :value="1">1×</option>
-            <option :value="1.1">1.1×</option>
-          </select>
-        </div>
-        <label class="flex items-center gap-2">
-          <input v-model="autoReadAloud" type="checkbox" data-testid="bong-tts-auto" :disabled="!browserTtsSupported">
-          Tự đọc sau khi BÔNG trả lời (tắt mặc định)
-        </label>
-        <p v-if="vietnameseVoices.length === 0" class="text-amber-800" data-testid="bong-tts-unavailable">Chrome chưa liệt kê giọng vi-VN. Bạn có thể cần cài giọng tiếng Việt cho Windows rồi tải lại.</p>
-        <p class="opacity-70" data-testid="bong-tts-disclaimer">{{ BONG_TTS_NOTICE }}</p>
-      </div>
     </div>
 
     <div ref="listRef" class="bong-messages min-h-0 flex-1 overflow-y-auto px-4 py-4" role="log" aria-live="polite" data-testid="bong-chat-messages">
-      <p v-if="messages.length === 0" class="bong-welcome text-sm">
-        Xin chào! Nhập lời chào để thử giao diện, hoặc chọn AI thật để kết nối Gemini.
-      </p>
+      <p v-if="messages.length === 0" class="bong-welcome text-sm">Chào bạn! BÔNG đang nghe đây.</p>
       <div
         v-for="item in messages"
         :key="item.id"
@@ -511,7 +500,7 @@ onUnmounted(() => {
           Gửi
         </button>
       </form>
-      <div class="text-xs opacity-65" data-testid="bong-speech-disclaimer">Micro chỉ bật khi bạn bấm nút. Web Speech của Chrome có thể gửi âm thanh tới dịch vụ của nhà cung cấp trình duyệt để nhận dạng; <strong>chưa phải Sherpa ngoại tuyến</strong>. BÔNG không tự gửi tin nhắn sau khi nghe, bạn được kiểm tra chữ trước khi bấm Gửi. Giọng đọc web là thử nghiệm của Chrome/Windows, chưa phải Mai Chi và chưa có đồng bộ miệng Live2D.</div>
+      <div class="text-xs opacity-60" data-testid="bong-speech-disclaimer">🎙 Nói → kiểm tra chữ → Gửi · 🔊 Nghe thử (chưa phải Mai Chi)</div>
     </div>
   </section>
 </template>
@@ -527,9 +516,10 @@ onUnmounted(() => {
   max-height: 88dvh;
   backdrop-filter: blur(14px);
 }
-.bong-chat-head, .bong-chat-foot { padding: 14px; background: #eefaff; }
+.bong-chat-head, .bong-chat-foot { padding: 9px 12px; background: #eefaff; }
 .bong-chat-head { border-bottom: 1px solid #d1e7ef; }
 .bong-chat-foot { border-top: 1px solid #d1e7ef; }
+.bong-settings { max-height: min(48dvh, 310px); overflow-y: auto; border-top: 1px solid #d1e7ef; padding-top: 7px; }
 .bong-tab, .bong-clear { background: #e1eaf0; color: #314258; }
 .bong-tab.active { background: #158bb2; color: white; }
 .bong-input { width: 100%; color: #23394b; background: white; border: 1px solid #c4dae4; outline-color: #1590b2; }
@@ -548,6 +538,6 @@ onUnmounted(() => {
 .bong-error { color: #96333e; background: #ffe7ea; }
 @media (max-width: 767px) {
   .bong-chat { border-radius: 15px; max-height: 65dvh; }
-  .bong-chat-head, .bong-chat-foot { padding: 10px; }
+  .bong-chat-head, .bong-chat-foot { padding: 8px 10px; }
 }
 </style>
