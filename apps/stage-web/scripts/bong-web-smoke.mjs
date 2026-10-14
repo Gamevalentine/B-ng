@@ -66,6 +66,7 @@ try {
       stageCanvasCount: 0,
       textChatPassed: false,
       aiApiCallsWithoutKey: 0,
+      mockGeminiMultiTurnPassed: false,
       errors: [],
       missingAssets: [],
     }
@@ -97,14 +98,57 @@ try {
       await textInput.fill('Xin chào')
       await page.locator('[data-testid="bong-chat-send"]').click()
       await page.locator('[data-testid="bong-chat-error"]').getByText(/nhập API key/i).waitFor({ state: 'visible', timeout: 10000 })
+      const noKeyRequests = aiApiCalls.length
+      if (noKeyRequests !== 0)
+        throw new Error('BÔNG attempted an AI API request without explicit visitor key')
+
+      // Intercept ALL Gemini requests in the browser. No live Google calls or paid credits.
+      const mockCalls = []
+      await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+        const request = route.request()
+        const headers = {
+          'access-control-allow-origin': '*',
+          'access-control-allow-methods': 'POST, OPTIONS',
+          'access-control-allow-headers': '*',
+          'cache-control': 'no-store',
+        }
+        if (request.method() === 'OPTIONS') {
+          await route.fulfill({ status: 204, headers })
+          return
+        }
+        const payload = request.postDataJSON()
+        mockCalls.push({ url: request.url(), payload, hasApiKey: !!request.headers()['x-goog-api-key'] })
+        const answer = mockCalls.length === 1 ? 'Chào Minh, mình là BÔNG!' : 'Mình nhớ bạn tên Minh.'
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          headers,
+          body: JSON.stringify({ candidates: [{ content: { parts: [{ text: answer }] } }] }),
+        })
+      })
+      await page.locator('[data-testid="bong-api-key"]').fill('browser-test-key-never-real')
+      await page.locator('[data-testid="bong-model"]').selectOption('gemini-3.1-flash-lite')
+      await textInput.fill('Tôi tên là Minh')
+      await page.locator('[data-testid="bong-chat-send"]').click()
+      await page.locator('[data-testid="bong-chat-messages"]').getByText('Chào Minh, mình là BÔNG!').waitFor({ state: 'visible', timeout: 15000 })
+      await page.locator('[data-testid="bong-ai-connected"]').waitFor({ state: 'visible', timeout: 5000 })
+      await textInput.fill('Tôi tên gì?')
+      await page.locator('[data-testid="bong-chat-send"]').click()
+      await page.locator('[data-testid="bong-chat-messages"]').getByText('Mình nhớ bạn tên Minh.').waitFor({ state: 'visible', timeout: 15000 })
+      if (mockCalls.length !== 2
+        || !mockCalls.every(x => x.hasApiKey && x.url.includes('gemini-3.1-flash-lite:generateContent') && !x.url.includes('browser-test-key'))
+        || mockCalls[1].payload.contents.map(x => x.role).join(',') !== 'user,model,user')
+        throw new Error('Multi-turn Gemini browser integration or API key header failed')
+      result.mockGeminiMultiTurnPassed = true
+      await page.unrouteAll({ behavior: 'wait' })
       await page.locator('[data-testid="bong-mode-demo"]').click()
-      result.aiApiCallsWithoutKey = aiApiCalls.length
+      result.aiApiCallsWithoutKey = noKeyRequests
       if (result.aiApiCallsWithoutKey !== 0)
         throw new Error('BÔNG attempted an AI API request without explicit visitor key')
       result.textChatPassed = true
       result.errors = pageErrors.slice(0, 10)
       result.missingAssets = assetErrors.slice(0, 10)
-      if (!result.title.includes('BÔNG') || !result.headerText.includes('BÔNG') || result.headerText.includes('AIRI') || !result.brandingVisible || !result.brandAssetsLoaded || !result.textChatPassed || result.errors.length || result.missingAssets.length)
+      if (!result.title.includes('BÔNG') || !result.headerText.includes('BÔNG') || result.headerText.includes('AIRI') || !result.brandingVisible || !result.brandAssetsLoaded || !result.textChatPassed || !result.mockGeminiMultiTurnPassed || result.errors.length || result.missingAssets.length)
         throw new Error('BÔNG title/branding or desktop-source image assets did not load')
       // Canvas presence and JS errors are measured separately: a canvas is not proof
       // that the original BÔNG Live2D rig/voice implementation is operational.
