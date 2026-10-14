@@ -88,8 +88,9 @@ try {
         { name: 'BÔNG Vietnamese test voice', lang: 'vi-VN', voiceURI: 'mock-vi-VN', localService: true },
         { name: 'English test voice', lang: 'en-US', voiceURI: 'mock-en-US', localService: true },
       ]
+      window.__bongFakeVoices = voices
       const fakeSynthesis = {
-        getVoices() { return voices },
+        getVoices() { return window.__bongFakeVoices },
         speak(utterance) {
           window.__bongTtsCalls.push({ text: utterance.text, lang: utterance.lang, voice: utterance.voice?.voiceURI, rate: utterance.rate })
           queueMicrotask(() => utterance.onstart?.())
@@ -188,6 +189,10 @@ try {
       await textInput.fill('Xin chào')
       await page.locator('[data-testid="bong-chat-send"]').click()
       await page.locator('[data-testid="bong-chat-messages"]').getByText('Phản hồi mô phỏng · không phải AI').waitFor({ state: 'visible', timeout: 10000 })
+      // Settings must be collapsed by default: the conversation takes priority.
+      if (await page.locator('[data-testid="bong-expanded-settings"]').count())
+        throw new Error('Settings take up chat space when they should be collapsed')
+      await page.locator('[data-testid="bong-settings-toggle"]').click()
       await page.locator('[data-testid="bong-tts-voice"]').selectOption('mock-vi-VN')
       await page.locator('[data-testid="bong-tts-rate"]').selectOption('0.9')
       if (await page.locator('[data-testid="bong-tts-auto"]').isChecked())
@@ -202,6 +207,19 @@ try {
       await page.locator('[data-testid="bong-tts-stop"]').click()
       if ((await page.evaluate(() => window.__bongTtsCancelCount)) < 1)
         throw new Error('BÔNG did not cancel speech when user requested stop')
+      // Regression: user's Chrome lists NO Vietnamese voice, read button must still work.
+      await page.evaluate(() => { window.__bongFakeVoices = [] })
+      await page.locator('[data-testid="bong-tts-refresh"]').click()
+      await page.locator('[data-testid="bong-tts-voice"]').selectOption('__system_default__')
+      await page.locator('[data-testid="bong-tts-unavailable"]').waitFor({ state: 'visible', timeout: 5000 })
+      await page.locator('[data-testid="bong-tts-speak"]').first().click()
+      const lastFallback = await page.evaluate(() => window.__bongTtsCalls.at(-1))
+      if (lastFallback.voice !== undefined || lastFallback.lang !== 'vi-VN')
+        throw new Error('Fallback did not attempt system voice with Vietnamese language')
+      await page.locator('[data-testid="bong-tts-stop"]').click()
+      await page.evaluate(() => { window.__bongFakeVoices = [{ name: 'BÔNG Vietnamese test voice', lang: 'vi-VN', voiceURI: 'mock-vi-VN', localService: true }] })
+      await page.locator('[data-testid="bong-tts-refresh"]').click()
+      await page.locator('[data-testid="bong-tts-voice"]').selectOption('mock-vi-VN')
       await page.locator('[data-testid="bong-tts-auto"]').check()
       await page.locator('[data-testid="bong-mode-gemini"]').click()
       await textInput.fill('Xin chào')
