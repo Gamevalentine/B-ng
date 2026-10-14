@@ -69,6 +69,37 @@ try {
       }
       Object.defineProperty(window, 'SpeechRecognition', { value: FakeVietnameseRecognition, configurable: true })
       Object.defineProperty(window, 'webkitSpeechRecognition', { value: FakeVietnameseRecognition, configurable: true })
+      // Fake voices & output: nothing reaches hardware, vendor services or microphone.
+      window.__bongTtsCalls = []
+      window.__bongTtsCancelCount = 0
+      class FakeUtterance {
+        constructor(text) {
+          this.text = text
+          this.lang = ''
+          this.voice = null
+          this.rate = 1
+          this.pitch = 1
+          this.onstart = null
+          this.onend = null
+          this.onerror = null
+        }
+      }
+      const voices = [
+        { name: 'BÔNG Vietnamese test voice', lang: 'vi-VN', voiceURI: 'mock-vi-VN', localService: true },
+        { name: 'English test voice', lang: 'en-US', voiceURI: 'mock-en-US', localService: true },
+      ]
+      const fakeSynthesis = {
+        getVoices() { return voices },
+        speak(utterance) {
+          window.__bongTtsCalls.push({ text: utterance.text, lang: utterance.lang, voice: utterance.voice?.voiceURI, rate: utterance.rate })
+          queueMicrotask(() => utterance.onstart?.())
+        },
+        cancel() { window.__bongTtsCancelCount++ },
+        addEventListener() {},
+        removeEventListener() {},
+      }
+      Object.defineProperty(window, 'SpeechSynthesisUtterance', { value: FakeUtterance, configurable: true })
+      Object.defineProperty(window, 'speechSynthesis', { value: fakeSynthesis, configurable: true })
     })
     const page = await context.newPage()
     const pageErrors = []
@@ -98,6 +129,7 @@ try {
       mockGeminiMultiTurnPassed: false,
       mockGeminiTransientRecoveryPassed: false,
       vietnameseMicrophonePassed: false,
+      vietnameseBrowserTtsPassed: false,
       errors: [],
       missingAssets: [],
     }
@@ -156,6 +188,21 @@ try {
       await textInput.fill('Xin chào')
       await page.locator('[data-testid="bong-chat-send"]').click()
       await page.locator('[data-testid="bong-chat-messages"]').getByText('Phản hồi mô phỏng · không phải AI').waitFor({ state: 'visible', timeout: 10000 })
+      await page.locator('[data-testid="bong-tts-voice"]').selectOption('mock-vi-VN')
+      await page.locator('[data-testid="bong-tts-rate"]').selectOption('0.9')
+      if (await page.locator('[data-testid="bong-tts-auto"]').isChecked())
+        throw new Error('Automatic voice playback must be opt-in')
+      if (await page.evaluate(() => window.__bongTtsCalls.length) !== 0)
+        throw new Error('Browser played audio without user action')
+      await page.locator('[data-testid="bong-tts-speak"]').first().click()
+      await page.locator('[data-testid="bong-tts-stop"]').waitFor({ state: 'visible', timeout: 10000 })
+      const spoken = await page.evaluate(() => window.__bongTtsCalls[0])
+      if (spoken.voice !== 'mock-vi-VN' || spoken.lang !== 'vi-VN' || spoken.rate !== 0.9 || !spoken.text.includes('BÔNG'))
+        throw new Error('BÔNG did not use the selected Vietnamese voice at the selected speed')
+      await page.locator('[data-testid="bong-tts-stop"]').click()
+      if ((await page.evaluate(() => window.__bongTtsCancelCount)) < 1)
+        throw new Error('BÔNG did not cancel speech when user requested stop')
+      await page.locator('[data-testid="bong-tts-auto"]').check()
       await page.locator('[data-testid="bong-mode-gemini"]').click()
       await textInput.fill('Xin chào')
       await page.locator('[data-testid="bong-chat-send"]').click()
@@ -207,6 +254,8 @@ try {
       await page.locator('[data-testid="bong-chat-send"]').click()
       await page.locator('[data-testid="bong-chat-messages"]').getByText('Chào Minh, mình là BÔNG!').waitFor({ state: 'visible', timeout: 15000 })
       await page.locator('[data-testid="bong-ai-connected"]').waitFor({ state: 'visible', timeout: 5000 })
+      await page.waitForFunction(() => window.__bongTtsCalls.some(x => x.text.includes('Chào Minh')), { timeout: 10000 })
+      result.vietnameseBrowserTtsPassed = true
       await textInput.fill('Tôi tên gì?')
       await page.locator('[data-testid="bong-chat-send"]').click()
       await page.locator('[data-testid="bong-chat-messages"]').getByText('Mình nhớ bạn tên Minh.').waitFor({ state: 'visible', timeout: 15000 })
@@ -230,7 +279,7 @@ try {
       result.textChatPassed = true
       result.errors = pageErrors.slice(0, 10)
       result.missingAssets = assetErrors.slice(0, 10)
-      if (!result.title.includes('BÔNG') || !result.headerText.includes('BÔNG') || result.headerText.includes('AIRI') || !result.brandingVisible || !result.brandAssetsLoaded || !result.textChatPassed || !result.mockGeminiMultiTurnPassed || !result.mockGeminiTransientRecoveryPassed || !result.vietnameseMicrophonePassed || result.errors.length || result.missingAssets.length)
+      if (!result.title.includes('BÔNG') || !result.headerText.includes('BÔNG') || result.headerText.includes('AIRI') || !result.brandingVisible || !result.brandAssetsLoaded || !result.textChatPassed || !result.mockGeminiMultiTurnPassed || !result.mockGeminiTransientRecoveryPassed || !result.vietnameseMicrophonePassed || !result.vietnameseBrowserTtsPassed || result.errors.length || result.missingAssets.length)
         throw new Error('BÔNG title/branding or desktop-source image assets did not load')
       // Canvas presence and JS errors are measured separately: a canvas is not proof
       // that the original BÔNG Live2D rig/voice implementation is operational.
