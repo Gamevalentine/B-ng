@@ -4,6 +4,7 @@ import { appendSpokenText, createVietnameseRecognizer, extractVietnameseTranscri
 import type { BrowserSpeechRecognition } from '../lib/bong-speech'
 import { DEFAULT_GEMINI_MODEL, generateBongReply, offlinePreviewReply } from '../lib/bong-chat'
 import type { BongTurn } from '../lib/bong-chat'
+import { BONG_TTS_NOTICE, chooseVietnameseVoice, clampBongSpeechRate, prepareVietnameseSpeech } from '../lib/bong-tts-browser'
 
 interface DisplayTurn extends BongTurn {
   id: number
@@ -19,6 +20,101 @@ const error = ref('')
 const retryNotice = ref('')
 const busy = ref(false)
 const listRef = ref<HTMLElement>()
+const browserTtsSupported = ref(false)
+const vietnameseVoices = ref<{ uri: string, name: string, lang: string }[]>([])
+const selectedVoiceURI = ref('')
+const autoReadAloud = ref(false)
+const ttsRate = ref(1)
+const ttsStatus = ref('')
+const speakingMessageId = ref<number | null>(null)
+let currentUtterance: SpeechSynthesisUtterance | undefined
+let ttsGeneration = 0
+
+function refreshVietnameseVoices() {
+  if (!browserTtsSupported.value)
+    return
+  const voices = window.speechSynthesis.getVoices().filter(v => /^vi(?:-|$)/i.test(v.lang))
+  vietnameseVoices.value = voices.map(v => ({ uri: v.voiceURI, name: v.name, lang: v.lang }))
+  if (!voices.some(v => v.voiceURI === selectedVoiceURI.value))
+    selectedVoiceURI.value = voices[0]?.voiceURI ?? ''
+}
+
+function stopBongSpeech() {
+  ttsGeneration++
+  currentUtterance = undefined
+  speakingMessageId.value = null
+  if (browserTtsSupported.value)
+    window.speechSynthesis.cancel()
+}
+
+function speakBongText(text: string, id: number) {
+  if (speakingMessageId.value === id) {
+    stopBongSpeech()
+    ttsStatus.value = 'Đã dừng đọc.'
+    return
+  }
+  stopBongSpeech()
+  if (!browserTtsSupported.value) {
+    ttsStatus.value = 'Trình duyệt không hỗ trợ chức năng phát giọng nói.'
+    return
+  }
+  refreshVietnameseVoices()
+  const voice = chooseVietnameseVoice(window.speechSynthesis.getVoices(), selectedVoiceURI.value)
+  if (!voice) {
+    ttsStatus.value = 'Chưa tìm thấy giọng tiếng Việt trên thiết bị. Thử bấm Tải lại giọng hoặc cài giọng tiếng Việt trong hệ điều hành.'
+    return
+  }
+  const clean = prepareVietnameseSpeech(text)
+  if (!clean) {
+    ttsStatus.value = 'Tin nhắn không có nội dung phù hợp để đọc.'
+    return
+  }
+  const generation = ++ttsGeneration
+  try {
+    const utterance = new SpeechSynthesisUtterance(clean)
+    utterance.lang = 'vi-VN'
+    utterance.voice = voice
+    utterance.rate = clampBongSpeechRate(ttsRate.value)
+    utterance.pitch = 1
+    currentUtterance = utterance
+    utterance.onstart = () => {
+      if (ttsGeneration !== generation) return
+      speakingMessageId.value = id
+      ttsStatus.value = 'BÔNG đang đọc bằng giọng của trình duyệt...'
+    }
+    utterance.onend = () => {
+      if (ttsGeneration !== generation) return
+      speakingMessageId.value = null
+      currentUtterance = undefined
+      ttsStatus.value = 'Đã đọc xong.'
+    }
+    utterance.onerror = () => {
+      if (ttsGeneration !== generation) return
+      speakingMessageId.value = null
+      currentUtterance = undefined
+      ttsStatus.value = 'Không phát được giọng nói. Hãy chọn giọng khác hoặc thử lại.'
+    }
+    // Never record the microphone while the browser is reading aloud.
+    releaseSpeechRecognition()
+    window.speechSynthesis.speak(utterance)
+  }
+  catch {
+    speakingMessageId.value = null
+    currentUtterance = undefined
+    ttsStatus.value = 'Trình duyệt không phát được âm thanh tiếng Việt.'
+  }
+}
+
+function speakBongMessage(item: DisplayTurn) {
+  if (item.role !== 'model') return
+  speakBongText(item.text, item.id)
+}
+
+function maybeReadBongReply(item: DisplayTurn) {
+  if (autoReadAloud.value && browserTtsSupported.value)
+    speakBongText(item.text, item.id)
+}
+
 const microphoneSupported = ref(false)
 const listening = ref(false)
 const interimTranscript = ref('')
@@ -26,7 +122,14 @@ const speechStatus = ref('')
 let recognition: BrowserSpeechRecognition | undefined
 let spokenInputBase = ''
 let receivedFinal = false
-onMounted(() => { microphoneSupported.value = !!resolveVietnameseRecognition() })
+onMounted(() => {
+  microphoneSupported.value = !!resolveVietnameseRecognition()
+  browserTtsSupported.value = typeof window.speechSynthesis !== 'undefined' && typeof window.SpeechSynthesisUtterance === 'function'
+  if (browserTtsSupported.value) {
+    refreshVietnameseVoices()
+    window.speechSynthesis.addEventListener?.('voiceschanged', refreshVietnameseVoices)
+  }
+})
 
 function releaseSpeechRecognition() {
   const current = recognition
@@ -45,6 +148,7 @@ function releaseSpeechRecognition() {
 function toggleMicrophone() {
   if (busy.value)
     return
+  if (!recognition && speakingMessageId.value !== null) stopBongSpeech()
   if (recognition) {
     // Stop recording; the browser may deliver a final result before onend.
     try {
@@ -124,6 +228,8 @@ async function scrollToEnd() {
 function selectMode(value: 'demo' | 'gemini') {
   if (busy.value)
     return
+  stopBongSpeech()
+  ttsStatus.value = ''
   releaseSpeechRecognition()
   speechStatus.value = ''
   mode.value = value
@@ -136,6 +242,8 @@ function selectMode(value: 'demo' | 'gemini') {
 function clearConversation() {
   if (busy.value)
     return
+  stopBongSpeech()
+  ttsStatus.value = ''
   releaseSpeechRecognition()
   speechStatus.value = ''
   messages.value = []
@@ -157,6 +265,7 @@ async function sendMessage() {
     return
   }
 
+  stopBongSpeech()
   error.value = ''
   retryNotice.value = ''
   input.value = ''
@@ -165,8 +274,10 @@ async function sendMessage() {
   await scrollToEnd()
 
   if (mode.value === 'demo') {
-    messages.value.push({ id: nextId++, role: 'model', text: offlinePreviewReply(text), demo: true })
+    const demoReply: DisplayTurn = { id: nextId++, role: 'model', text: offlinePreviewReply(text), demo: true }
+    messages.value.push(demoReply)
     await scrollToEnd()
+    maybeReadBongReply(demoReply)
     return
   }
 
@@ -183,9 +294,11 @@ async function sendMessage() {
         retryNotice.value = `Gemini trả về HTTP ${status}. BÔNG đang đợi ngắn và thử lại đúng một lần...`
       },
     })
-    messages.value.push({ id: nextId++, role: 'model', text: reply, demo: false })
+    const aiReply: DisplayTurn = { id: nextId++, role: 'model', text: reply, demo: false }
+    messages.value.push(aiReply)
     connected.value = true
     await scrollToEnd()
+    maybeReadBongReply(aiReply)
   }
   catch (err) {
     connected.value = false
@@ -206,6 +319,9 @@ async function sendMessage() {
 }
 
 onUnmounted(() => {
+  stopBongSpeech()
+  if (browserTtsSupported.value)
+    window.speechSynthesis.removeEventListener?.('voiceschanged', refreshVietnameseVoices)
   releaseSpeechRecognition()
   controller?.abort()
   apiKey.value = ''
@@ -218,7 +334,7 @@ onUnmounted(() => {
       <div class="flex items-center justify-between gap-2">
         <div>
           <div class="text-sm font-semibold">Trò chuyện với BÔNG</div>
-          <div class="text-xs opacity-70">Giai đoạn 3A · Tiếng Việt → văn bản</div>
+          <div class="text-xs opacity-70">Giai đoạn 3B · Nghe và đọc tiếng Việt</div>
         </div>
         <button
           class="bong-clear rounded-lg px-3 py-1 text-xs"
@@ -286,6 +402,37 @@ onUnmounted(() => {
       <p v-else class="text-xs opacity-75" data-testid="bong-demo-notice">
         Chế độ mô phỏng miễn phí: phản hồi mẫu, <strong>không phải trí tuệ nhân tạo</strong>.
       </p>
+      <div class="flex flex-col gap-2 rounded-lg bg-white/60 p-2 text-xs" data-testid="bong-tts-settings">
+        <div class="flex items-center justify-between gap-2">
+          <strong>Giọng đọc tiếng Việt · trình duyệt</strong>
+          <button type="button" class="bong-clear rounded-lg px-2 py-1" data-testid="bong-tts-refresh" @click="refreshVietnameseVoices">Tải lại giọng</button>
+        </div>
+        <div class="flex items-center gap-2">
+          <label for="bong-tts-voice">Giọng</label>
+          <select
+            id="bong-tts-voice" v-model="selectedVoiceURI"
+            class="bong-input min-w-0 flex-1 rounded-lg px-2 py-1"
+            data-testid="bong-tts-voice"
+            :disabled="!browserTtsSupported || vietnameseVoices.length === 0"
+            @change="stopBongSpeech"
+          >
+            <option v-if="vietnameseVoices.length === 0" value="">Chưa có giọng tiếng Việt</option>
+            <option v-for="voice in vietnameseVoices" :key="voice.uri" :value="voice.uri">{{ voice.name }} ({{ voice.lang }})</option>
+          </select>
+          <label for="bong-tts-rate">Tốc độ</label>
+          <select id="bong-tts-rate" v-model.number="ttsRate" class="bong-input w-auto rounded-lg px-1 py-1" data-testid="bong-tts-rate">
+            <option :value="0.9">0.9×</option>
+            <option :value="1">1×</option>
+            <option :value="1.1">1.1×</option>
+          </select>
+        </div>
+        <label class="flex items-center gap-2">
+          <input v-model="autoReadAloud" type="checkbox" data-testid="bong-tts-auto" :disabled="!browserTtsSupported">
+          Tự đọc sau khi BÔNG trả lời (tắt mặc định)
+        </label>
+        <p v-if="vietnameseVoices.length === 0" class="text-amber-800" data-testid="bong-tts-unavailable">Chrome chưa liệt kê giọng vi-VN. Bạn có thể cần cài giọng tiếng Việt cho Windows rồi tải lại.</p>
+        <p class="opacity-70" data-testid="bong-tts-disclaimer">{{ BONG_TTS_NOTICE }}</p>
+      </div>
     </div>
 
     <div ref="listRef" class="bong-messages min-h-0 flex-1 overflow-y-auto px-4 py-4" role="log" aria-live="polite" data-testid="bong-chat-messages">
@@ -301,6 +448,14 @@ onUnmounted(() => {
         <div class="bong-bubble rounded-xl px-3 py-2 text-sm" :class="item.role === 'user' ? 'sent' : 'received'">
           <div v-if="item.demo" class="mb-1 text-xs font-semibold opacity-75">Phản hồi mô phỏng · không phải AI</div>
           <span class="whitespace-pre-wrap break-words">{{ item.text }}</span>
+          <div v-if="item.role === 'model'" class="mt-2 flex items-center gap-2">
+            <button
+              type="button" class="bong-read rounded-lg px-2 py-1 text-xs"
+              :aria-label="speakingMessageId === item.id ? 'Dừng đọc tin nhắn BÔNG' : 'Đọc tin nhắn BÔNG'"
+              data-testid="bong-tts-speak"
+              @click="speakBongMessage(item)"
+            >{{ speakingMessageId === item.id ? '■ Dừng đọc' : '🔊 Nghe BÔNG đọc' }}</button>
+          </div>
         </div>
       </div>
       <p v-if="busy" class="text-sm" data-testid="bong-chat-busy">BÔNG đang chờ Gemini trả lời...</p>
@@ -311,6 +466,10 @@ onUnmounted(() => {
       <p v-if="retryNotice" role="status" class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="bong-gemini-retry-notice">{{ retryNotice }}</p>
       <p v-if="speechStatus" role="status" class="text-xs" data-testid="bong-speech-status">{{ speechStatus }}</p>
       <p v-if="interimTranscript" class="text-xs opacity-75" data-testid="bong-speech-interim">Đang nhận diện: {{ interimTranscript }}</p>
+      <div v-if="ttsStatus" class="flex items-center justify-between gap-2 text-xs" data-testid="bong-tts-status" role="status">
+        <span>{{ ttsStatus }}</span>
+        <button v-if="speakingMessageId !== null" type="button" data-testid="bong-tts-stop" class="bong-clear rounded px-2 py-1" @click="stopBongSpeech">Dừng phát</button>
+      </div>
       <form class="flex gap-2" @submit.prevent="sendMessage">
         <button
           type="button"
@@ -344,7 +503,7 @@ onUnmounted(() => {
           Gửi
         </button>
       </form>
-      <div class="text-xs opacity-65" data-testid="bong-speech-disclaimer">Micro chỉ bật khi bạn bấm nút. Web Speech của Chrome có thể gửi âm thanh tới dịch vụ của nhà cung cấp trình duyệt để nhận dạng; <strong>chưa phải Sherpa ngoại tuyến</strong>. BÔNG không tự gửi tin nhắn sau khi nghe, bạn được kiểm tra chữ trước khi bấm Gửi. Giọng Mai Chi chưa tích hợp.</div>
+      <div class="text-xs opacity-65" data-testid="bong-speech-disclaimer">Micro chỉ bật khi bạn bấm nút. Web Speech của Chrome có thể gửi âm thanh tới dịch vụ của nhà cung cấp trình duyệt để nhận dạng; <strong>chưa phải Sherpa ngoại tuyến</strong>. BÔNG không tự gửi tin nhắn sau khi nghe, bạn được kiểm tra chữ trước khi bấm Gửi. Giọng đọc web là thử nghiệm của Chrome/Windows, chưa phải Mai Chi và chưa có đồng bộ miệng Live2D.</div>
     </div>
   </section>
 </template>
@@ -369,6 +528,7 @@ onUnmounted(() => {
 .bong-input:focus { outline: 2px solid #87cae2; }
 .bong-send { background: #128eb3; color: white; }
 .bong-send:disabled { cursor: not-allowed; opacity: .55; }
+.bong-read { background: #def0f7; color: #24536a; }
 .bong-mic { background: #d7edf6; color: #244e64; white-space: nowrap; }
 .bong-mic.listening { background: #b9e9d8; color: #176443; }
 .bong-mic:disabled { opacity: .5; cursor: not-allowed; }
