@@ -24,6 +24,7 @@ const listRef = ref<HTMLElement>()
 const browserTtsSupported = ref(false)
 const vietnameseVoices = ref<{ uri: string, name: string, lang: string }[]>([])
 const selectedVoiceURI = ref(BONG_SYSTEM_VOICE)
+const systemVoiceSelectedManually = ref(false)
 const autoReadAloud = ref(false)
 const ttsRate = ref(1)
 const ttsStatus = ref('')
@@ -38,7 +39,7 @@ function refreshVietnameseVoices() {
   vietnameseVoices.value = voices.map(v => ({ uri: v.voiceURI, name: v.name, lang: v.lang }))
   if (selectedVoiceURI.value !== BONG_SYSTEM_VOICE && !voices.some(v => v.voiceURI === selectedVoiceURI.value))
     selectedVoiceURI.value = voices[0]?.voiceURI ?? BONG_SYSTEM_VOICE
-  if (selectedVoiceURI.value === BONG_SYSTEM_VOICE && voices.length)
+  if (selectedVoiceURI.value === BONG_SYSTEM_VOICE && voices.length && !systemVoiceSelectedManually.value)
     selectedVoiceURI.value = voices[0]?.voiceURI ?? BONG_SYSTEM_VOICE
 }
 
@@ -403,7 +404,7 @@ onUnmounted(() => {
           </div>
           <div class="flex items-center gap-2">
             <select id="bong-tts-voice" v-model="selectedVoiceURI" class="bong-input min-w-0 flex-1 rounded-lg px-2 py-1"
-              aria-label="Chọn giọng đọc" data-testid="bong-tts-voice" :disabled="!browserTtsSupported" @change="stopBongSpeech">
+              aria-label="Chọn giọng đọc" data-testid="bong-tts-voice" :disabled="!browserTtsSupported" @change="systemVoiceSelectedManually = selectedVoiceURI === BONG_SYSTEM_VOICE; stopBongSpeech()">
               <option :value="BONG_SYSTEM_VOICE">Giọng hệ thống (thử nghiệm)</option>
               <option v-for="voice in vietnameseVoices" :key="voice.uri" :value="voice.uri">{{ voice.name }} ({{ voice.lang }})</option>
             </select>
