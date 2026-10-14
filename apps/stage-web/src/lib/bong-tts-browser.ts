@@ -1,4 +1,5 @@
 /** Browser-provided speech synthesis only; this is NOT Mai Chi / Sherpa TTS. */
+export const BONG_SYSTEM_VOICE = '__system_default__' // Fallback does not guarantee Vietnamese pronunciation.
 export interface BongBrowserVoice {
   name: string
   lang: string
