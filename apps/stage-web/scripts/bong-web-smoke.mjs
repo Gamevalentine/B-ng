@@ -96,6 +96,7 @@ try {
       textChatPassed: false,
       aiApiCallsWithoutKey: 0,
       mockGeminiMultiTurnPassed: false,
+      mockGeminiTransientRecoveryPassed: false,
       vietnameseMicrophonePassed: false,
       errors: [],
       missingAssets: [],
@@ -165,6 +166,7 @@ try {
 
       // Intercept ALL Gemini requests in the browser. No live Google calls or paid credits.
       const mockCalls = []
+      let transientCount = 0
       await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
         const request = route.request()
         const headers = {
@@ -179,7 +181,19 @@ try {
         }
         const payload = request.postDataJSON()
         mockCalls.push({ url: request.url(), payload, hasApiKey: !!request.headers()['x-goog-api-key'] })
-        const answer = mockCalls.length === 1 ? 'Chào Minh, mình là BÔNG!' : 'Mình nhớ bạn tên Minh.'
+        const lastText = payload.contents.at(-1)?.parts?.[0]?.text
+        if (lastText === 'Kiểm tra lỗi 503' && ++transientCount === 1) {
+          await route.fulfill({
+            status: 503,
+            contentType: 'application/json',
+            headers,
+            body: JSON.stringify({ error: { code: 503, status: 'UNAVAILABLE' } }),
+          })
+          return
+        }
+        const answer = lastText === 'Kiểm tra lỗi 503'
+          ? 'Em đã thử lại và trả lời được rồi!'
+          : mockCalls.length === 1 ? 'Chào Minh, mình là BÔNG!' : 'Mình nhớ bạn tên Minh.'
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -200,6 +214,13 @@ try {
         || !mockCalls.every(x => x.hasApiKey && x.url.includes('gemini-3.1-flash-lite:generateContent') && !x.url.includes('browser-test-key'))
         || mockCalls[1].payload.contents.map(x => x.role).join(',') !== 'user,model,user')
         throw new Error('Multi-turn Gemini browser integration or API key header failed')
+      // Recover once from a simulated transient 503 without ever calling Google.
+      await textInput.fill('Kiểm tra lỗi 503')
+      await page.locator('[data-testid="bong-chat-send"]').click()
+      await page.locator('[data-testid="bong-chat-messages"]').getByText('Em đã thử lại và trả lời được rồi!').waitFor({ state: 'visible', timeout: 15000 })
+      if (transientCount !== 2 || mockCalls.length !== 4)
+        throw new Error('Gemini 503 retry was not bounded to a single extra request')
+      result.mockGeminiTransientRecoveryPassed = true
       result.mockGeminiMultiTurnPassed = true
       await page.unrouteAll({ behavior: 'wait' })
       await page.locator('[data-testid="bong-mode-demo"]').click()
@@ -209,7 +230,7 @@ try {
       result.textChatPassed = true
       result.errors = pageErrors.slice(0, 10)
       result.missingAssets = assetErrors.slice(0, 10)
-      if (!result.title.includes('BÔNG') || !result.headerText.includes('BÔNG') || result.headerText.includes('AIRI') || !result.brandingVisible || !result.brandAssetsLoaded || !result.textChatPassed || !result.mockGeminiMultiTurnPassed || !result.vietnameseMicrophonePassed || result.errors.length || result.missingAssets.length)
+      if (!result.title.includes('BÔNG') || !result.headerText.includes('BÔNG') || result.headerText.includes('AIRI') || !result.brandingVisible || !result.brandAssetsLoaded || !result.textChatPassed || !result.mockGeminiMultiTurnPassed || !result.mockGeminiTransientRecoveryPassed || !result.vietnameseMicrophonePassed || result.errors.length || result.missingAssets.length)
         throw new Error('BÔNG title/branding or desktop-source image assets did not load')
       // Canvas presence and JS errors are measured separately: a canvas is not proof
       // that the original BÔNG Live2D rig/voice implementation is operational.
