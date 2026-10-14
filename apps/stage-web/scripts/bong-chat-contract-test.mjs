@@ -1,7 +1,7 @@
 // Executed in GitHub Actions only; no external Gemini requests are made.
 import assert from 'node:assert/strict'
 import { DEFAULT_GEMINI_MODEL, generateBongReply, offlinePreviewReply } from '../src/lib/bong-chat.ts'
-assert.equal(DEFAULT_GEMINI_MODEL, 'gemini-3.1-flash-lite')
+assert.equal(DEFAULT_GEMINI_MODEL, 'gemini-3.5-flash-lite')
 
 assert.match(offlinePreviewReply('xin chào'), /mô phỏng/i)
 assert.match(offlinePreviewReply('Hôm nay thế nào?'), /mô phỏng/i)
@@ -22,7 +22,7 @@ const result = await generateBongReply({
 })
 assert.equal(result, 'Xin chào, mình là BÔNG!')
 assert.equal(captured.init.headers['x-goog-api-key'], 'test-key-never-real')
-assert.equal(captured.url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent')
+assert.equal(captured.url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent')
 assert.ok(!captured.url.includes('test-key-never-real'))
 assert.equal(JSON.parse(captured.init.body).contents[0].parts[0].text, 'Xin chào')
 assert.equal(captured.init.referrerPolicy, 'no-referrer')
