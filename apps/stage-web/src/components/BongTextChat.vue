@@ -72,7 +72,7 @@ async function sendMessage() {
     await scrollToEnd()
   }
   catch (err) {
-    error.value = controller.signal.aborted
+    error.value = controller?.signal.aborted
       ? 'Yêu cầu quá thời gian 35 giây. Hãy thử lại.'
       : (err instanceof Error ? err.message : 'Không thể kết nối AI.')
     // Never print the API key, raw response or untrusted request to the console.
