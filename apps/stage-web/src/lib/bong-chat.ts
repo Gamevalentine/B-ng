@@ -23,8 +23,8 @@ const SYSTEM_INSTRUCTION = 'Bạn là BÔNG, trợ lý AI thân thiện và hữ
 export function offlinePreviewReply(input: string): string {
   const normalized = input.trim().toLocaleLowerCase('vi')
   if (/^(xin chào|chào|hello|hi|chào bông)[!?.\s]*$/i.test(normalized))
-    return 'Chào bạn! Mình là BÔNG. Đây là câu trả lời **mô phỏng** để thử giao diện; hãy chọn “AI thật” và kết nối API của bạn để trò chuyện với mô hình.'
-  return 'BÔNG đã nhận được tin nhắn của bạn. Đây chỉ là phản hồi **mô phỏng giao diện**, chưa xử lý bằng mô hình AI. Hãy chọn “AI thật” để nhận câu trả lời thực sự.'
+    return 'Chào bạn! Mình là BÔNG. Đây là câu trả lời mô phỏng để thử giao diện; hãy chọn “AI thật” và kết nối API của bạn để trò chuyện với mô hình.'
+  return 'BÔNG đã nhận được tin nhắn của bạn. Đây chỉ là phản hồi mô phỏng giao diện, chưa xử lý bằng mô hình AI. Hãy chọn “AI thật” để nhận câu trả lời thực sự.'
 }
 
 export async function generateBongReply(options: GenerateBongReplyOptions): Promise<string> {
