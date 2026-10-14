@@ -41,6 +41,35 @@ try {
       locale: 'vi-VN',
       permissions: [],
     })
+    // Install a fully simulated SpeechRecognition before the web app loads.
+    // No real microphone/device permission or external speech service is used.
+    await context.addInitScript(() => {
+      class FakeVietnameseRecognition {
+        lang = ''
+        continuous = true
+        interimResults = false
+        maxAlternatives = 0
+        onstart = null
+        onresult = null
+        onerror = null
+        onend = null
+        start() {
+          window.__bongFakeMicrophone = this
+          this.onstart?.()
+        }
+        stop() { this.onend?.() }
+        abort() {}
+        deliver(text, isFinal = true) {
+          this.onresult?.({ results: [{ 0: { transcript: text }, length: 1, isFinal }] })
+        }
+        fail(code) {
+          this.onerror?.({ error: code })
+          this.onend?.()
+        }
+      }
+      Object.defineProperty(window, 'SpeechRecognition', { value: FakeVietnameseRecognition, configurable: true })
+      Object.defineProperty(window, 'webkitSpeechRecognition', { value: FakeVietnameseRecognition, configurable: true })
+    })
     const page = await context.newPage()
     const pageErrors = []
     const assetErrors = []
@@ -67,6 +96,7 @@ try {
       textChatPassed: false,
       aiApiCallsWithoutKey: 0,
       mockGeminiMultiTurnPassed: false,
+      vietnameseMicrophonePassed: false,
       errors: [],
       missingAssets: [],
     }
@@ -91,6 +121,37 @@ try {
       // Giai đoạn 2: exercise actual browser text inputs without calling an AI provider.
       const textInput = page.locator('[data-testid="bong-chat-input"]')
       await textInput.waitFor({ state: 'visible', timeout: 10000 })
+
+      // Test 3A: voice -> Vietnamese text -> manual submit. No speech call leaves this browser.
+      await textInput.fill('Bạn ơi')
+      await page.locator('[data-testid="bong-speech-mic"]').click()
+      await page.locator('[data-testid="bong-speech-status"]').getByText(/đang nghe tiếng việt/i).waitFor()
+      const micOptions = await page.evaluate(() => ({
+        lang: window.__bongFakeMicrophone.lang,
+        continuous: window.__bongFakeMicrophone.continuous,
+        interimResults: window.__bongFakeMicrophone.interimResults,
+      }))
+      if (micOptions.lang !== 'vi-VN' || micOptions.continuous || !micOptions.interimResults)
+        throw new Error('Vietnamese microphone configuration is incorrect')
+      await page.evaluate(() => window.__bongFakeMicrophone.deliver('Hôm nay', false))
+      await page.locator('[data-testid="bong-speech-interim"]').getByText(/hôm nay/i).waitFor()
+      await page.evaluate(() => {
+        window.__bongFakeMicrophone.deliver('hôm nay thế nào', true)
+        window.__bongFakeMicrophone.stop()
+      })
+      if (await textInput.inputValue() !== 'Bạn ơi hôm nay thế nào')
+        throw new Error('Voice result was not correctly added to the unsent input')
+      if (await page.locator('[data-testid="bong-chat-messages"]').getByText('Bạn ơi hôm nay thế nào').count())
+        throw new Error('Speech input was sent automatically without user confirmation')
+      await page.locator('[data-testid="bong-speech-mic"]').click()
+      await page.evaluate(() => window.__bongFakeMicrophone.fail('not-allowed'))
+      await page.locator('[data-testid="bong-speech-status"]').getByText(/cấp quyền micro/i).waitFor()
+      if (await textInput.inputValue() !== 'Bạn ơi hôm nay thế nào')
+        throw new Error('Denied microphone permission erased the draft')
+      await page.locator('[data-testid="bong-speech-mic"]').click()
+      await page.evaluate(() => window.__bongFakeMicrophone.fail('no-speech'))
+      await page.locator('[data-testid="bong-speech-status"]').getByText(/chưa nghe rõ/i).waitFor()
+      result.vietnameseMicrophonePassed = true
       await textInput.fill('Xin chào')
       await page.locator('[data-testid="bong-chat-send"]').click()
       await page.locator('[data-testid="bong-chat-messages"]').getByText('Phản hồi mô phỏng · không phải AI').waitFor({ state: 'visible', timeout: 10000 })
@@ -148,7 +209,7 @@ try {
       result.textChatPassed = true
       result.errors = pageErrors.slice(0, 10)
       result.missingAssets = assetErrors.slice(0, 10)
-      if (!result.title.includes('BÔNG') || !result.headerText.includes('BÔNG') || result.headerText.includes('AIRI') || !result.brandingVisible || !result.brandAssetsLoaded || !result.textChatPassed || !result.mockGeminiMultiTurnPassed || result.errors.length || result.missingAssets.length)
+      if (!result.title.includes('BÔNG') || !result.headerText.includes('BÔNG') || result.headerText.includes('AIRI') || !result.brandingVisible || !result.brandAssetsLoaded || !result.textChatPassed || !result.mockGeminiMultiTurnPassed || !result.vietnameseMicrophonePassed || result.errors.length || result.missingAssets.length)
         throw new Error('BÔNG title/branding or desktop-source image assets did not load')
       // Canvas presence and JS errors are measured separately: a canvas is not proof
       // that the original BÔNG Live2D rig/voice implementation is operational.
