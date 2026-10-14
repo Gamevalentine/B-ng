@@ -270,12 +270,13 @@ onUnmounted(() => {
         <div class="flex items-center gap-2">
           <label class="font-medium" for="bong-gemini-model">Mô hình</label>
           <select id="bong-gemini-model" v-model="model" class="bong-input min-w-0 flex-1 rounded-lg px-2 py-2" data-testid="bong-model">
-            <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite (khuyến nghị)</option>
+            <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (khuyến nghị)</option>
+            <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite (đời trước)</option>
             <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (tài khoản cũ)</option>
             <option value="gemini-2.5-flash">Gemini 2.5 Flash (tài khoản cũ)</option>
           </select>
         </div>
-        <p class="opacity-75">BÔNG gửi yêu cầu trực tiếp tới Google Gemini. Key chỉ nằm trong bộ nhớ của tab (nhưng vẫn hiện trong yêu cầu mạng của trình duyệt). <strong>Chỉ thử bằng key riêng có giới hạn và không bật thanh toán nếu bạn muốn miễn phí. Khi máy chủ trả lỗi 5xx, BÔNG có thể tự thử lại đúng một lần bằng cùng mô hình và API key; lần thử này cũng có thể tính vào hạn mức.</strong></p>
+        <p class="opacity-75">BÔNG gửi yêu cầu trực tiếp tới Google Gemini. Key chỉ nằm trong bộ nhớ của tab (nhưng vẫn hiện trong yêu cầu mạng của trình duyệt). <strong>Chỉ thử bằng key riêng có giới hạn và không bật thanh toán nếu bạn muốn miễn phí. Khi máy chủ trả lỗi 5xx, BÔNG có thể tự thử lại đúng một lần bằng cùng mô hình và API key; lần thử này cũng có thể tính vào hạn mức. Nếu lỗi HTTP 503 lặp lại, bạn có thể chọn 3.5 Flash-Lite trong danh sách, không cần cấp key mới; BÔNG không tự đổi mô hình.</strong></p>
         <div class="flex items-center justify-between gap-2">
           <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="font-semibold underline">Tạo key trong Google AI Studio ↗</a>
           <span v-if="connected" class="font-semibold text-green-700" data-testid="bong-ai-connected">AI đã trả lời</span>
