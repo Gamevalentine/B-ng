@@ -4,13 +4,14 @@ import { appendSpokenText, createVietnameseRecognizer, extractVietnameseTranscri
 import type { BrowserSpeechRecognition } from '../lib/bong-speech'
 import { DEFAULT_GEMINI_MODEL, generateBongReply, offlinePreviewReply } from '../lib/bong-chat'
 import type { BongTurn } from '../lib/bong-chat'
-import { BONG_TTS_NOTICE, chooseVietnameseVoice, clampBongSpeechRate, prepareVietnameseSpeech } from '../lib/bong-tts-browser'
+import { BONG_SYSTEM_VOICE, BONG_TTS_NOTICE, chooseVietnameseVoice, clampBongSpeechRate, prepareVietnameseSpeech } from '../lib/bong-tts-browser'
 
 interface DisplayTurn extends BongTurn {
   id: number
   demo: boolean
 }
 const mode = ref<'demo' | 'gemini'>('demo')
+const settingsExpanded = ref(false)
 const input = ref('')
 const apiKey = ref('') // Deliberately ephemeral; do NOT save to localStorage, URL or server.
 const model = ref(DEFAULT_GEMINI_MODEL)
@@ -22,7 +23,7 @@ const busy = ref(false)
 const listRef = ref<HTMLElement>()
 const browserTtsSupported = ref(false)
 const vietnameseVoices = ref<{ uri: string, name: string, lang: string }[]>([])
-const selectedVoiceURI = ref('')
+const selectedVoiceURI = ref(BONG_SYSTEM_VOICE)
 const autoReadAloud = ref(false)
 const ttsRate = ref(1)
 const ttsStatus = ref('')
@@ -35,8 +36,10 @@ function refreshVietnameseVoices() {
     return
   const voices = window.speechSynthesis.getVoices().filter(v => /^vi(?:-|$)/i.test(v.lang))
   vietnameseVoices.value = voices.map(v => ({ uri: v.voiceURI, name: v.name, lang: v.lang }))
-  if (!voices.some(v => v.voiceURI === selectedVoiceURI.value))
-    selectedVoiceURI.value = voices[0]?.voiceURI ?? ''
+  if (selectedVoiceURI.value !== BONG_SYSTEM_VOICE && !voices.some(v => v.voiceURI === selectedVoiceURI.value))
+    selectedVoiceURI.value = voices[0]?.voiceURI ?? BONG_SYSTEM_VOICE
+  if (selectedVoiceURI.value === BONG_SYSTEM_VOICE && voices.length)
+    selectedVoiceURI.value = voices[0]?.voiceURI ?? BONG_SYSTEM_VOICE
 }
 
 function stopBongSpeech() {
@@ -59,9 +62,10 @@ function speakBongText(text: string, id: number) {
     return
   }
   refreshVietnameseVoices()
-  const voice = chooseVietnameseVoice(window.speechSynthesis.getVoices(), selectedVoiceURI.value)
-  if (!voice) {
-    ttsStatus.value = 'Chưa tìm thấy giọng tiếng Việt trên thiết bị. Thử bấm Tải lại giọng hoặc cài giọng tiếng Việt trong hệ điều hành.'
+  const useSystemDefault = selectedVoiceURI.value === BONG_SYSTEM_VOICE
+  const voice = useSystemDefault ? undefined : chooseVietnameseVoice(window.speechSynthesis.getVoices(), selectedVoiceURI.value)
+  if (!voice && !useSystemDefault) {
+    ttsStatus.value = 'Giọng không còn khả dụng. Hãy chọn “Giọng hệ thống” để thử.'
     return
   }
   const clean = prepareVietnameseSpeech(text)
@@ -73,14 +77,16 @@ function speakBongText(text: string, id: number) {
   try {
     const utterance = new SpeechSynthesisUtterance(clean)
     utterance.lang = 'vi-VN'
-    utterance.voice = voice
+    // An unassigned voice lets Chrome attempt the system default (Vietnamese may be inaccurate).
+    if (voice)
+      utterance.voice = voice
     utterance.rate = clampBongSpeechRate(ttsRate.value)
     utterance.pitch = 1
     currentUtterance = utterance
     utterance.onstart = () => {
       if (ttsGeneration !== generation) return
       speakingMessageId.value = id
-      ttsStatus.value = 'BÔNG đang đọc bằng giọng của trình duyệt...'
+      ttsStatus.value = useSystemDefault ? 'Đang thử giọng hệ thống; tiếng Việt có thể chưa chuẩn.' : 'BÔNG đang đọc...'
     }
     utterance.onend = () => {
       if (ttsGeneration !== generation) return
@@ -233,6 +239,8 @@ function selectMode(value: 'demo' | 'gemini') {
   releaseSpeechRecognition()
   speechStatus.value = ''
   mode.value = value
+  if (value === 'gemini' && !apiKey.value.trim())
+    settingsExpanded.value = true
   error.value = ''
   retryNotice.value = ''
   connected.value = false
