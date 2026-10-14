@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { nextTick, onUnmounted, ref } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { appendSpokenText, createVietnameseRecognizer, extractVietnameseTranscript, resolveVietnameseRecognition, voiceRecognitionError } from '../lib/bong-speech'
+import type { BrowserSpeechRecognition } from '../lib/bong-speech'
 import { DEFAULT_GEMINI_MODEL, generateBongReply, offlinePreviewReply } from '../lib/bong-chat'
 import type { BongTurn } from '../lib/bong-chat'
 
@@ -16,6 +18,100 @@ const messages = ref<DisplayTurn[]>([])
 const error = ref('')
 const busy = ref(false)
 const listRef = ref<HTMLElement>()
+const microphoneSupported = ref(false)
+const listening = ref(false)
+const interimTranscript = ref('')
+const speechStatus = ref('')
+let recognition: BrowserSpeechRecognition | undefined
+let spokenInputBase = ''
+let receivedFinal = false
+onMounted(() => { microphoneSupported.value = !!resolveVietnameseRecognition() })
+
+function releaseSpeechRecognition() {
+  const current = recognition
+  recognition = undefined
+  if (current) {
+    current.onstart = null
+    current.onresult = null
+    current.onerror = null
+    current.onend = null
+    try { current.abort() } catch { /* Recognition may already be stopped. */ }
+  }
+  listening.value = false
+  interimTranscript.value = ''
+}
+
+function toggleMicrophone() {
+  if (busy.value)
+    return
+  if (recognition) {
+    // Stop recording; the browser may deliver a final result before onend.
+    try {
+      recognition.stop()
+      speechStatus.value = 'Đang hoàn tất nhận diện...'
+    }
+    catch {
+      releaseSpeechRecognition()
+      speechStatus.value = 'Đã dừng nghe.'
+    }
+    return
+  }
+
+  let current: BrowserSpeechRecognition
+  try {
+    current = createVietnameseRecognizer()
+  }
+  catch (err) {
+    speechStatus.value = err instanceof Error ? err.message : 'Không khởi động được micro.'
+    return
+  }
+  recognition = current
+  spokenInputBase = input.value
+  receivedFinal = false
+  speechStatus.value = 'Đang yêu cầu quyền micro...'
+  current.onstart = () => {
+    if (recognition !== current)
+      return
+    listening.value = true
+    speechStatus.value = 'Đang nghe tiếng Việt... Hãy nói rồi chờ BÔNG chuyển thành chữ.'
+  }
+  current.onresult = (event) => {
+    if (recognition !== current)
+      return
+    const transcript = extractVietnameseTranscript(event)
+    interimTranscript.value = transcript.interim
+    if (transcript.final) {
+      receivedFinal = true
+      input.value = appendSpokenText(spokenInputBase, transcript.final)
+      speechStatus.value = 'Đã nhận diện tiếng Việt. Kiểm tra văn bản rồi bấm Gửi.'
+    }
+  }
+  current.onerror = (event) => {
+    if (recognition !== current)
+      return
+    const message = voiceRecognitionError(event.error)
+    releaseSpeechRecognition()
+    speechStatus.value = message
+  }
+  current.onend = () => {
+    if (recognition !== current)
+      return
+    recognition = undefined
+    listening.value = false
+    interimTranscript.value = ''
+    if (!receivedFinal)
+      speechStatus.value = 'Chưa nhận được văn bản. Bạn có thể nói lại hoặc nhập bằng bàn phím.'
+  }
+
+  try {
+    current.start() // The only microphone start is from a direct user click.
+  }
+  catch {
+    releaseSpeechRecognition()
+    speechStatus.value = 'Không thể bật micro. Kiểm tra quyền micro của Chrome rồi thử lại.'
+  }
+}
+
 let nextId = 0
 let controller: AbortController | undefined
 
@@ -27,6 +123,8 @@ async function scrollToEnd() {
 function selectMode(value: 'demo' | 'gemini') {
   if (busy.value)
     return
+  releaseSpeechRecognition()
+  speechStatus.value = ''
   mode.value = value
   error.value = ''
   connected.value = false
@@ -36,12 +134,18 @@ function selectMode(value: 'demo' | 'gemini') {
 function clearConversation() {
   if (busy.value)
     return
+  releaseSpeechRecognition()
+  speechStatus.value = ''
   messages.value = []
   error.value = ''
   connected.value = false
 }
 
 async function sendMessage() {
+  if (recognition) {
+    speechStatus.value = 'Vui lòng dừng micro và chờ nhận diện xong trước khi gửi.'
+    return
+  }
   const text = input.value.trim()
   if (busy.value || !text)
     return
@@ -94,6 +198,7 @@ async function sendMessage() {
 }
 
 onUnmounted(() => {
+  releaseSpeechRecognition()
   controller?.abort()
   apiKey.value = ''
 })
@@ -105,7 +210,7 @@ onUnmounted(() => {
       <div class="flex items-center justify-between gap-2">
         <div>
           <div class="text-sm font-semibold">Trò chuyện với BÔNG</div>
-          <div class="text-xs opacity-70">Giai đoạn 2 · Văn bản</div>
+          <div class="text-xs opacity-70">Giai đoạn 3A · Tiếng Việt → văn bản</div>
         </div>
         <button
           class="bong-clear rounded-lg px-3 py-1 text-xs"
@@ -194,7 +299,21 @@ onUnmounted(() => {
 
     <div class="bong-chat-foot flex flex-col gap-2">
       <p v-if="error" role="alert" class="bong-error rounded-lg px-3 py-2 text-xs" data-testid="bong-chat-error">{{ error }}</p>
+      <p v-if="speechStatus" role="status" class="text-xs" data-testid="bong-speech-status">{{ speechStatus }}</p>
+      <p v-if="interimTranscript" class="text-xs opacity-75" data-testid="bong-speech-interim">Đang nhận diện: {{ interimTranscript }}</p>
       <form class="flex gap-2" @submit.prevent="sendMessage">
+        <button
+          type="button"
+          class="bong-mic rounded-xl px-3 py-2 text-sm font-semibold"
+          :class="{ listening }"
+          :aria-pressed="listening"
+          :aria-label="listening ? 'Dừng micro' : 'Bật micro tiếng Việt'"
+          :disabled="busy"
+          data-testid="bong-speech-mic"
+          @click="toggleMicrophone"
+        >
+          {{ listening ? 'Dừng' : '🎙' }}
+        </button>
         <input
           v-model="input"
           aria-label="Nhập tin nhắn cho BÔNG"
@@ -208,13 +327,13 @@ onUnmounted(() => {
         <button
           type="submit"
           class="bong-send rounded-xl px-4 py-2 text-sm font-semibold"
-          :disabled="busy || !input.trim()"
+          :disabled="busy || !!recognition || !input.trim()"
           data-testid="bong-chat-send"
         >
           Gửi
         </button>
       </form>
-      <div class="text-xs opacity-65">Phiên chat chỉ lưu tạm trong trang đang mở. Chưa tích hợp micro và giọng Mai Chi.</div>
+      <div class="text-xs opacity-65" data-testid="bong-speech-disclaimer">Micro chỉ bật khi bạn bấm nút. Web Speech của Chrome có thể gửi âm thanh tới dịch vụ của nhà cung cấp trình duyệt để nhận dạng; <strong>chưa phải Sherpa ngoại tuyến</strong>. BÔNG không tự gửi tin nhắn sau khi nghe, bạn được kiểm tra chữ trước khi bấm Gửi. Giọng Mai Chi chưa tích hợp.</div>
     </div>
   </section>
 </template>
@@ -239,6 +358,9 @@ onUnmounted(() => {
 .bong-input:focus { outline: 2px solid #87cae2; }
 .bong-send { background: #128eb3; color: white; }
 .bong-send:disabled { cursor: not-allowed; opacity: .55; }
+.bong-mic { background: #d7edf6; color: #244e64; white-space: nowrap; }
+.bong-mic.listening { background: #b9e9d8; color: #176443; }
+.bong-mic:disabled { opacity: .5; cursor: not-allowed; }
 .bong-messages { background: rgba(255,255,255,.55); }
 .bong-bubble { max-width: 88%; overflow-wrap: anywhere; }
 .bong-bubble.sent { background: #d7f4fd; }
