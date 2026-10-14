@@ -202,7 +202,7 @@ try {
         })
       })
       await page.locator('[data-testid="bong-api-key"]').fill('browser-test-key-never-real')
-      await page.locator('[data-testid="bong-model"]').selectOption('gemini-3.1-flash-lite')
+      await page.locator('[data-testid="bong-model"]').selectOption('gemini-3.5-flash-lite')
       await textInput.fill('Tôi tên là Minh')
       await page.locator('[data-testid="bong-chat-send"]').click()
       await page.locator('[data-testid="bong-chat-messages"]').getByText('Chào Minh, mình là BÔNG!').waitFor({ state: 'visible', timeout: 15000 })
@@ -211,7 +211,7 @@ try {
       await page.locator('[data-testid="bong-chat-send"]').click()
       await page.locator('[data-testid="bong-chat-messages"]').getByText('Mình nhớ bạn tên Minh.').waitFor({ state: 'visible', timeout: 15000 })
       if (mockCalls.length !== 2
-        || !mockCalls.every(x => x.hasApiKey && x.url.includes('gemini-3.1-flash-lite:generateContent') && !x.url.includes('browser-test-key'))
+        || !mockCalls.every(x => x.hasApiKey && x.url.includes('gemini-3.5-flash-lite:generateContent') && !x.url.includes('browser-test-key'))
         || mockCalls[1].payload.contents.map(x => x.role).join(',') !== 'user,model,user')
         throw new Error('Multi-turn Gemini browser integration or API key header failed')
       // Recover once from a simulated transient 503 without ever calling Google.
