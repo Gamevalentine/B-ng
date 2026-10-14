@@ -308,6 +308,7 @@ onUnmounted(() => {
           :class="{ listening }"
           :aria-pressed="listening"
           :aria-label="listening ? 'Dừng micro' : 'Bật micro tiếng Việt'"
+          :title="microphoneSupported ? 'Nhấn để nhận diện tiếng Việt' : 'Web Speech có thể không khả dụng trong trình duyệt này'"
           :disabled="busy"
           data-testid="bong-speech-mic"
           @click="toggleMicrophone"
