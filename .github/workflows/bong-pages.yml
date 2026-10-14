@@ -42,6 +42,8 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Test BÔNG text-chat adapter without external API calls
         run: node --experimental-strip-types apps/stage-web/scripts/bong-chat-contract-test.mjs
+      - name: Verify Vietnamese Web Speech adapter without using a real microphone
+        run: node --experimental-strip-types apps/stage-web/scripts/bong-speech-contract-test.mjs
       - name: Build BÔNG using repository-relative URLs
         # Turbo defaults to strict environment filtering. Forward BONG_PAGES_BASE_PATH
         # and VITE_BONG_* to the actual Vite build, not just the outer shell.
