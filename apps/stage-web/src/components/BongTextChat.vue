@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { appendSpokenText, createVietnameseRecognizer, extractVietnameseTranscript, resolveVietnameseRecognition, voiceRecognitionError } from '../lib/bong-speech'
 import type { BrowserSpeechRecognition } from '../lib/bong-speech'
 import { DEFAULT_GEMINI_MODEL, generateBongReply, offlinePreviewReply } from '../lib/bong-chat'
 import type { BongTurn } from '../lib/bong-chat'
 import { BONG_SYSTEM_VOICE, BONG_TTS_NOTICE, chooseVietnameseVoice, clampBongSpeechRate, prepareVietnameseSpeech } from '../lib/bong-tts-browser'
 import { BONG_GEMINI_VOICES, generateGeminiBongWav } from '../lib/bong-gemini-tts'
-import { useSpeakingStore } from '@proj-airi/stage-ui/stores/audio'
-import { storeToRefs } from 'pinia'
 import { approximateBrowserMouth, extractBongWavEnvelope, sampleBongMouthOpen } from '../lib/bong-lipsync'
 
 interface DisplayTurn extends BongTurn {
@@ -35,7 +33,16 @@ const geminiTtsVoice = ref('Leda')
 const ttsRate = ref(1)
 const ttsStatus = ref('')
 const speakingMessageId = ref<number | null>(null)
-const { nowSpeaking, mouthOpenSize } = storeToRefs(useSpeakingStore())
+// BÔNG owns its own web-preview speaking state. Never share the upstream
+// AIRI playback store, whose analyser can reset our mouth during web TTS.
+const nowSpeaking = ref(false)
+const mouthOpenSize = ref(0)
+const emit = defineEmits<{
+  (e: 'mouth', payload: { speaking: boolean, mouth: number }): void
+}>()
+watch([nowSpeaking, mouthOpenSize], () => {
+  emit('mouth', { speaking: nowSpeaking.value, mouth: mouthOpenSize.value })
+}, { flush: 'sync' })
 let mouthFrameId: number | undefined
 
 function closeBongMouth() {
