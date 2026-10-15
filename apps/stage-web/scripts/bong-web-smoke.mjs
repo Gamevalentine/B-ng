@@ -101,6 +101,13 @@ try {
       }
       Object.defineProperty(window, 'SpeechSynthesisUtterance', { value: FakeUtterance, configurable: true })
       Object.defineProperty(window, 'speechSynthesis', { value: fakeSynthesis, configurable: true })
+      window.__bongNeuralAudioPlays = 0
+      class FakeAudio {
+        constructor(url) { this.src = url; this.onended = null; this.onerror = null }
+        play() { window.__bongNeuralAudioPlays++; return Promise.resolve() }
+        pause() {}
+      }
+      Object.defineProperty(window, 'Audio', { value: FakeAudio, configurable: true })
     })
     const page = await context.newPage()
     const pageErrors = []
@@ -131,6 +138,7 @@ try {
       mockGeminiTransientRecoveryPassed: false,
       vietnameseMicrophonePassed: false,
       vietnameseBrowserTtsPassed: false,
+      mockNeuralTtsPassed: false,
       errors: [],
       missingAssets: [],
     }
@@ -193,6 +201,7 @@ try {
       if (await page.locator('[data-testid="bong-expanded-settings"]').count())
         throw new Error('Settings take up chat space when they should be collapsed')
       await page.locator('[data-testid="bong-settings-toggle"]').click()
+      await page.locator('[data-testid="bong-tts-engine"]').selectOption('browser')
       await page.locator('[data-testid="bong-tts-voice"]').selectOption('mock-vi-VN')
       await page.locator('[data-testid="bong-tts-rate"]').selectOption('0.9')
       if (await page.locator('[data-testid="bong-tts-auto"]').isChecked())
@@ -231,6 +240,7 @@ try {
 
       // Intercept ALL Gemini requests in the browser. No live Google calls or paid credits.
       const mockCalls = []
+      const neuralTtsCalls = []
       let transientCount = 0
       await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
         const request = route.request()
@@ -245,6 +255,22 @@ try {
           return
         }
         const payload = request.postDataJSON()
+        if (request.url().includes('gemini-3.1-flash-tts-preview')) {
+          neuralTtsCalls.push({
+            url: request.url(),
+            voice: payload.generationConfig?.speechConfig?.voiceConfig?.prebuiltVoiceConfig?.voiceName,
+            apiKeyHeader: request.headers()['x-goog-api-key'],
+          })
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            headers,
+            body: JSON.stringify({ candidates: [{ content: { parts: [{
+              inlineData: { data: Buffer.alloc(4800).toString('base64'), mimeType: 'audio/l16; rate=24000; channels=1' },
+            }] } }] }),
+          })
+          return
+        }
         mockCalls.push({ url: request.url(), payload, hasApiKey: !!request.headers()['x-goog-api-key'] })
         const lastText = payload.contents.at(-1)?.parts?.[0]?.text
         if (lastText === 'Kiểm tra lỗi 503' && ++transientCount === 1) {
@@ -289,6 +315,19 @@ try {
         throw new Error('Gemini 503 retry was not bounded to a single extra request')
       result.mockGeminiTransientRecoveryPassed = true
       result.mockGeminiMultiTurnPassed = true
+
+      // No hardware audio: intercept neural TTS HTTP response and fake audio playback.
+      await page.locator('[data-testid="bong-tts-auto"]').uncheck()
+      await page.locator('[data-testid="bong-tts-engine"]').selectOption('gemini')
+      await page.locator('[data-testid="bong-gemini-tts-voice"]').selectOption('Leda')
+      await page.locator('[data-testid="bong-tts-speak"]').last().click()
+      await page.waitForFunction(() => window.__bongNeuralAudioPlays > 0, { timeout: 12000 })
+      if (neuralTtsCalls.length !== 1 || neuralTtsCalls[0].voice !== 'Leda'
+        || neuralTtsCalls[0].apiKeyHeader !== 'browser-test-key-never-real'
+        || neuralTtsCalls[0].url.includes('browser-test-key'))
+        throw new Error('Vietnamese Gemini TTS call, user-selected voice or secret handling incorrect')
+      await page.locator('[data-testid="bong-tts-stop"]').click()
+      result.mockNeuralTtsPassed = true
       await page.unrouteAll({ behavior: 'wait' })
       await page.locator('[data-testid="bong-mode-demo"]').click()
       result.aiApiCallsWithoutKey = noKeyRequests
@@ -297,7 +336,7 @@ try {
       result.textChatPassed = true
       result.errors = pageErrors.slice(0, 10)
       result.missingAssets = assetErrors.slice(0, 10)
-      if (!result.title.includes('BÔNG') || !result.headerText.includes('BÔNG') || result.headerText.includes('AIRI') || !result.brandingVisible || !result.brandAssetsLoaded || !result.textChatPassed || !result.mockGeminiMultiTurnPassed || !result.mockGeminiTransientRecoveryPassed || !result.vietnameseMicrophonePassed || !result.vietnameseBrowserTtsPassed || result.errors.length || result.missingAssets.length)
+      if (!result.title.includes('BÔNG') || !result.headerText.includes('BÔNG') || result.headerText.includes('AIRI') || !result.brandingVisible || !result.brandAssetsLoaded || !result.textChatPassed || !result.mockGeminiMultiTurnPassed || !result.mockGeminiTransientRecoveryPassed || !result.vietnameseMicrophonePassed || !result.vietnameseBrowserTtsPassed || !result.mockNeuralTtsPassed || result.errors.length || result.missingAssets.length)
         throw new Error('BÔNG title/branding or desktop-source image assets did not load')
       // Canvas presence and JS errors are measured separately: a canvas is not proof
       // that the original BÔNG Live2D rig/voice implementation is operational.
