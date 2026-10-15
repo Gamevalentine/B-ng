@@ -57,9 +57,11 @@ const props = withDefaults(defineProps<{
   cursorPosition?: { x: number, y: number }
   enableOrbitControls?: boolean
   paused?: boolean
+  bongPreviewMode?: boolean
 }>(), {
   enableOrbitControls: true,
   paused: false,
+  bongPreviewMode: false,
 })
 
 const componentState = defineModel<'pending' | 'loading' | 'mounted'>('state', { default: 'pending' })
@@ -680,7 +682,9 @@ function resetLive2dLipSync() {
 }
 
 function syncLipSyncLoop() {
-  if (stageModelRenderer.value === 'live2d' && !props.paused && lipSyncStarted.value) {
+  // BÔNG web preview owns its PCM-derived mouth curve. Never overwrite it
+  // with the upstream TTS source's analyser, which has no audio connected.
+  if (!props.bongPreviewMode && stageModelRenderer.value === 'live2d' && !props.paused && lipSyncStarted.value) {
     startLipSyncLoop()
     return
   }
