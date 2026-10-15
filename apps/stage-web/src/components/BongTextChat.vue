@@ -463,32 +463,41 @@ onUnmounted(() => {
           </details>
         </div>
         <div class="flex flex-col gap-2 rounded-lg bg-white/70 p-2" data-testid="bong-tts-settings">
-          <div class="flex items-center justify-between">
-            <strong>Giọng đọc</strong>
-            <button type="button" class="bong-clear rounded px-2 py-1" data-testid="bong-tts-refresh" @click="refreshVietnameseVoices">Tải lại</button>
-          </div>
-          <div class="flex items-center gap-2">
-            <select id="bong-tts-voice" v-model="selectedVoiceURI" class="bong-input min-w-0 flex-1 rounded-lg px-2 py-1"
-              aria-label="Chọn giọng đọc" data-testid="bong-tts-voice" :disabled="!browserTtsSupported" @change="systemVoiceSelectedManually = selectedVoiceURI === BONG_SYSTEM_VOICE; stopBongSpeech()">
-              <option :value="BONG_SYSTEM_VOICE">Giọng hệ thống (thử nghiệm)</option>
-              <option v-for="voice in vietnameseVoices" :key="voice.uri" :value="voice.uri">{{ voice.name }} ({{ voice.lang }})</option>
+          <strong>Giọng BÔNG</strong>
+          <label for="bong-tts-engine" class="opacity-70">Nguồn phát âm</label>
+          <select id="bong-tts-engine" v-model="ttsEngine" class="bong-input rounded-lg px-2 py-1"
+            data-testid="bong-tts-engine" @change="stopBongSpeech">
+            <option value="gemini">Giọng AI tiếng Việt · dùng Gemini API key</option>
+            <option value="browser">Giọng của Chrome · chỉ thử khi có vi-VN</option>
+          </select>
+          <template v-if="ttsEngine === 'gemini'">
+            <select v-model="geminiTtsVoice" class="bong-input rounded-lg px-2 py-1"
+              aria-label="Giọng Gemini TTS" data-testid="bong-gemini-tts-voice" @change="stopBongSpeech">
+              <option v-for="item in BONG_GEMINI_VOICES" :key="item.id" :value="item.id">{{ item.label }}</option>
             </select>
-            <select id="bong-tts-rate" v-model.number="ttsRate" class="bong-input w-auto rounded-lg px-1 py-1"
-              aria-label="Tốc độ đọc" data-testid="bong-tts-rate">
-              <option :value="0.9">0.9×</option>
-              <option :value="1">1×</option>
-              <option :value="1.1">1.1×</option>
-            </select>
-          </div>
+            <p class="opacity-70">Giọng AI hỗ trợ tiếng Việt, chưa phải Mai Chi. Chỉ gửi yêu cầu khi bạn bấm Nghe hoặc bật tự đọc. Có hạn mức miễn phí tùy tài khoản; nếu tài khoản bật thanh toán, có thể phát sinh phí.</p>
+          </template>
+          <template v-else>
+            <div class="flex items-center gap-2">
+              <select id="bong-tts-voice" v-model="selectedVoiceURI" class="bong-input min-w-0 flex-1 rounded-lg px-2 py-1"
+                aria-label="Chọn giọng Chrome" data-testid="bong-tts-voice" :disabled="!browserTtsSupported" @change="systemVoiceSelectedManually = selectedVoiceURI === BONG_SYSTEM_VOICE; stopBongSpeech()">
+                <option :value="BONG_SYSTEM_VOICE">Giọng hệ thống · không chuẩn tiếng Việt</option>
+                <option v-for="voice in vietnameseVoices" :key="voice.uri" :value="voice.uri">{{ voice.name }} ({{ voice.lang }})</option>
+              </select>
+              <button type="button" class="bong-clear rounded px-2 py-1" data-testid="bong-tts-refresh" @click="refreshVietnameseVoices">Tải lại</button>
+              <select id="bong-tts-rate" v-model.number="ttsRate" class="bong-input w-auto rounded-lg px-1 py-1"
+                aria-label="Tốc độ đọc" data-testid="bong-tts-rate">
+                <option :value="0.9">0.9×</option>
+                <option :value="1">1×</option>
+                <option :value="1.1">1.1×</option>
+              </select>
+            </div>
+            <p v-if="vietnameseVoices.length === 0" class="text-amber-800" data-testid="bong-tts-unavailable">Chrome không có giọng vi-VN; không nên dùng giọng hệ thống để đọc tiếng Việt.</p>
+            <details class="opacity-70" data-testid="bong-tts-disclaimer"><summary class="cursor-pointer">Giới hạn giọng hệ thống</summary>{{ BONG_TTS_NOTICE }}</details>
+          </template>
           <label class="flex items-center gap-2">
-            <input v-model="autoReadAloud" type="checkbox" data-testid="bong-tts-auto" :disabled="!browserTtsSupported"> Tự đọc sau khi trả lời
+            <input v-model="autoReadAloud" type="checkbox" data-testid="bong-tts-auto"> Tự đọc sau khi trả lời (mặc định tắt)
           </label>
-          <p v-if="vietnameseVoices.length === 0" class="text-amber-800" data-testid="bong-tts-unavailable">
-            Chưa có giọng vi-VN; có thể thử giọng hệ thống nhưng phát âm không chuẩn.
-          </p>
-          <details class="opacity-70" data-testid="bong-tts-disclaimer">
-            <summary class="cursor-pointer">Giới hạn giọng đọc</summary>{{ BONG_TTS_NOTICE }}
-          </details>
         </div>
         <details class="opacity-70">
           <summary class="cursor-pointer">Micro và quyền riêng tư</summary>
@@ -566,7 +575,7 @@ onUnmounted(() => {
           Gửi
         </button>
       </form>
-      <div class="text-xs opacity-60" data-testid="bong-speech-disclaimer">🎙 Nói → kiểm tra chữ → Gửi · 🔊 Nghe thử (chưa phải Mai Chi)</div>
+      <div class="text-xs opacity-60" data-testid="bong-speech-disclaimer">🎙 Nói → Gửi · 🔊 Giọng AI tiếng Việt (chưa phải Mai Chi)</div>
     </div>
   </section>
 </template>
