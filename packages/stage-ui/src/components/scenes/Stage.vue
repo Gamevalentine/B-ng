@@ -58,10 +58,14 @@ const props = withDefaults(defineProps<{
   enableOrbitControls?: boolean
   paused?: boolean
   bongPreviewMode?: boolean
+  bongPreviewSpeaking?: boolean
+  bongPreviewMouthOpen?: number
 }>(), {
   enableOrbitControls: true,
   paused: false,
   bongPreviewMode: false,
+  bongPreviewSpeaking: false,
+  bongPreviewMouthOpen: 0,
 })
 
 const componentState = defineModel<'pending' | 'loading' | 'mounted'>('state', { default: 'pending' })
@@ -142,6 +146,12 @@ const {
   spineRenderScale,
 } = storeToRefs(settingsStore)
 const { mouthOpenSize, nowSpeaking } = storeToRefs(useSpeakingStore())
+const stageMouth = computed(() => props.bongPreviewMode
+  ? Math.min(1, Math.max(0, props.bongPreviewMouthOpen ?? 0))
+  : mouthOpenSize.value)
+const stageSpeaking = computed(() => props.bongPreviewMode
+  ? !!props.bongPreviewSpeaking
+  : nowSpeaking.value)
 const disposePlaybackStateHandler = defineInvokeHandler(
   getSpeechBusContext(),
   speechOutputGetPlaybackState,
@@ -1121,8 +1131,8 @@ defineExpose({
         :model-src="stageModelSelectedUrl"
         :model-id="stageModelSelected"
         :cursor-position="cursorPosition"
-        :mouth-open-size="mouthOpenSize"
-        :now-speaking="nowSpeaking"
+        :mouth-open-size="stageMouth"
+        :now-speaking="stageSpeaking"
         :paused="paused"
         :theme-colors-hue="themeColorsHue"
         :theme-colors-hue-dynamic="themeColorsHueDynamic"
