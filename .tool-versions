@@ -1,3 +1,3 @@
-nodejs 26.7.0
-pnpm   11.24.0
-dotnet 10
+# Cloudflare Pages supports Node through asdf. PNPM_VERSION is set in Pages environment.
+# pnpm and dotnet are not installed as asdf plugins in Cloudflare Pages.
+nodejs 22.16.0
