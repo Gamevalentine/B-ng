@@ -48,6 +48,8 @@ jobs:
         run: node --experimental-strip-types apps/stage-web/scripts/bong-tts-contract-test.mjs
       - name: Verify opt-in Vietnamese Gemini TTS without real API calls
         run: node --experimental-strip-types apps/stage-web/scripts/bong-gemini-tts-contract-test.mjs
+      - name: Verify waveform-driven Live2D mouth movement from recorded samples
+        run: node --experimental-strip-types apps/stage-web/scripts/bong-lipsync-contract-test.mjs
       - name: Build BÔNG using repository-relative URLs
         # Turbo defaults to strict environment filtering. Forward BONG_PAGES_BASE_PATH
         # and VITE_BONG_* to the actual Vite build, not just the outer shell.
