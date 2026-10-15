@@ -26,7 +26,6 @@ const listRef = ref<HTMLElement>()
 const browserTtsSupported = ref(false)
 const vietnameseVoices = ref<{ uri: string, name: string, lang: string }[]>([])
 const selectedVoiceURI = ref(BONG_SYSTEM_VOICE)
-const systemVoiceSelectedManually = ref(false)
 const autoReadAloud = ref(false)
 const ttsEngine = ref<'gemini' | 'browser'>('gemini')
 const geminiTtsVoice = ref('Leda')
@@ -96,9 +95,8 @@ function refreshVietnameseVoices() {
     return
   const voices = window.speechSynthesis.getVoices().filter(v => /^vi(?:-|$)/i.test(v.lang))
   vietnameseVoices.value = voices.map(v => ({ uri: v.voiceURI, name: v.name, lang: v.lang }))
-  if (selectedVoiceURI.value !== BONG_SYSTEM_VOICE && !voices.some(v => v.voiceURI === selectedVoiceURI.value))
-    selectedVoiceURI.value = voices[0]?.voiceURI ?? BONG_SYSTEM_VOICE
-  if (selectedVoiceURI.value === BONG_SYSTEM_VOICE && voices.length && !systemVoiceSelectedManually.value)
+  // Never fall back to an arbitrary English/system voice when vi-VN is absent.
+  if (!voices.some(v => v.voiceURI === selectedVoiceURI.value))
     selectedVoiceURI.value = voices[0]?.voiceURI ?? BONG_SYSTEM_VOICE
 }
 
@@ -171,10 +169,16 @@ async function speakBongText(text: string, id: number) {
         return
       // Audio has started: use waveform RMS at the player's current position.
       // Invalid formats are supported for playback but cannot drive mouth motion.
-      try { startBongMouthFromAudio(player, wavBytes, generation) }
+      let mouthSynchronized = false
+      try {
+        startBongMouthFromAudio(player, wavBytes, generation)
+        mouthSynchronized = true
+      }
       catch { closeBongMouth() }
       if (generation === ttsGeneration)
-        ttsStatus.value = 'Đang nói · miệng Live2D theo âm thanh Gemini.'
+        ttsStatus.value = mouthSynchronized
+          ? 'Đang nói · miệng Live2D theo âm thanh Gemini.'
+          : 'Đang nói · chưa đồng bộ được miệng với tệp âm thanh này.'
     }
     catch (err) {
       if (generation !== ttsGeneration) return
@@ -193,19 +197,18 @@ async function speakBongText(text: string, id: number) {
     return
   }
   refreshVietnameseVoices()
-  const useSystemDefault = selectedVoiceURI.value === BONG_SYSTEM_VOICE
-  const voice = useSystemDefault ? undefined : chooseVietnameseVoice(window.speechSynthesis.getVoices(), selectedVoiceURI.value)
-  if (!voice && !useSystemDefault) {
-    ttsStatus.value = 'Không tìm thấy giọng tiếng Việt trên Chrome.'
+  const voice = chooseVietnameseVoice(window.speechSynthesis.getVoices(), selectedVoiceURI.value)
+  if (!voice) {
+    // The previous system-default fallback could speak Vietnamese with an English/male voice.
+    ttsStatus.value = 'Thiết bị không có giọng đọc tiếng Việt. Hãy chọn giọng AI Gemini hoặc cài giọng tiếng Việt cho trình duyệt.'
     return
   }
   const generation = ++ttsGeneration
   try {
     const utterance = new SpeechSynthesisUtterance(clean)
     utterance.lang = 'vi-VN'
-    // An unassigned voice lets Chrome attempt the system default (Vietnamese may be inaccurate).
-    if (voice)
-      utterance.voice = voice
+    // Always bind an actual Vietnamese voice; never let Chrome pick English.
+    utterance.voice = voice
     utterance.rate = clampBongSpeechRate(ttsRate.value)
     utterance.pitch = 1
     currentUtterance = utterance
@@ -214,7 +217,7 @@ async function speakBongText(text: string, id: number) {
       speakingMessageId.value = id
       // Browser speech synthesis has no PCM output, so mouth movement is an approximation.
       startBongBrowserMouth(generation)
-      ttsStatus.value = useSystemDefault ? 'Giọng hệ thống · miệng chuyển động mô phỏng.' : 'BÔNG đang đọc bằng giọng trình duyệt...'
+      ttsStatus.value = 'Đang đọc tiếng Việt · miệng chuyển động mô phỏng.'
     }
     utterance.onend = () => {
       if (ttsGeneration !== generation) return
@@ -545,8 +548,8 @@ onUnmounted(() => {
           <template v-else>
             <div class="flex items-center gap-2">
               <select id="bong-tts-voice" v-model="selectedVoiceURI" class="bong-input min-w-0 flex-1 rounded-lg px-2 py-1"
-                aria-label="Chọn giọng Chrome" data-testid="bong-tts-voice" :disabled="!browserTtsSupported" @change="systemVoiceSelectedManually = selectedVoiceURI === BONG_SYSTEM_VOICE; stopBongSpeech()">
-                <option :value="BONG_SYSTEM_VOICE">Giọng hệ thống · không chuẩn tiếng Việt</option>
+                aria-label="Chọn giọng Chrome" data-testid="bong-tts-voice" :disabled="!browserTtsSupported" @change="stopBongSpeech">
+                <option :value="BONG_SYSTEM_VOICE" disabled>Chưa chọn giọng tiếng Việt</option>
                 <option v-for="voice in vietnameseVoices" :key="voice.uri" :value="voice.uri">{{ voice.name }} ({{ voice.lang }})</option>
               </select>
               <button type="button" class="bong-clear rounded px-2 py-1" data-testid="bong-tts-refresh" @click="refreshVietnameseVoices">Tải lại</button>
@@ -557,7 +560,7 @@ onUnmounted(() => {
                 <option :value="1.1">1.1×</option>
               </select>
             </div>
-            <p v-if="vietnameseVoices.length === 0" class="text-amber-800" data-testid="bong-tts-unavailable">Chrome không có giọng vi-VN; không nên dùng giọng hệ thống để đọc tiếng Việt.</p>
+            <p v-if="vietnameseVoices.length === 0" class="text-amber-800" data-testid="bong-tts-unavailable">Chrome chưa có giọng tiếng Việt. BÔNG sẽ không phát bằng giọng tiếng Anh; hãy dùng Gemini TTS nếu có API key.</p>
             <details class="opacity-70" data-testid="bong-tts-disclaimer"><summary class="cursor-pointer">Giới hạn giọng hệ thống</summary>{{ BONG_TTS_NOTICE }}</details>
           </template>
           <label class="flex items-center gap-2">
@@ -566,7 +569,7 @@ onUnmounted(() => {
         </div>
         <details class="opacity-70">
           <summary class="cursor-pointer">Micro và quyền riêng tư</summary>
-          Web Speech có thể dùng dịch vụ của Chrome. Chưa phải Sherpa offline; giọng đọc chưa phải Mai Chi và chưa đồng bộ miệng.
+          Web Speech có thể dùng dịch vụ của Chrome. Giọng này chưa phải Mai Chi; đồng bộ miệng trình duyệt chỉ là mô phỏng. Với âm thanh Gemini, miệng chuyển động theo biên độ âm thanh.
         </details>
       </div>
       <p v-if="mode === 'gemini' && !apiKey.trim() && !settingsExpanded" class="text-xs opacity-70">
@@ -654,20 +657,23 @@ onUnmounted(() => {
   box-shadow: 0 8px 38px rgba(26, 88, 112, 0.10);
   min-height: 280px;
   max-height: 88dvh;
+  position: relative;
+  isolation: isolate;
+  pointer-events: auto;
   backdrop-filter: blur(14px);
 }
 .bong-chat-head, .bong-chat-foot { padding: 9px 12px; background: #eefaff; }
 .bong-chat-head { border-bottom: 1px solid #d1e7ef; }
 .bong-chat-foot { border-top: 1px solid #d1e7ef; }
-.bong-settings { max-height: min(48dvh, 310px); overflow-y: auto; border-top: 1px solid #d1e7ef; padding-top: 7px; }
-.bong-tab, .bong-clear { background: #e1eaf0; color: #314258; }
+.bong-settings { max-height: min(30dvh, 240px); overflow-y: auto; border-top: 1px solid #d1e7ef; padding-top: 7px; overscroll-behavior: contain; }
+.bong-tab, .bong-clear { background: #e1eaf0; color: #314258; cursor: pointer; touch-action: manipulation; }
 .bong-tab.active { background: #158bb2; color: white; }
 .bong-input { width: 100%; color: #23394b; background: white; border: 1px solid #c4dae4; outline-color: #1590b2; }
 .bong-input:focus { outline: 2px solid #87cae2; }
-.bong-send { background: #128eb3; color: white; }
+.bong-send { background: #128eb3; color: white; cursor: pointer; touch-action: manipulation; }
 .bong-send:disabled { cursor: not-allowed; opacity: .55; }
-.bong-read { background: #def0f7; color: #24536a; }
-.bong-mic { background: #d7edf6; color: #244e64; white-space: nowrap; }
+.bong-read { background: #def0f7; color: #24536a; cursor: pointer; touch-action: manipulation; }
+.bong-mic { background: #d7edf6; color: #244e64; white-space: nowrap; cursor: pointer; touch-action: manipulation; }
 .bong-mic.listening { background: #b9e9d8; color: #176443; }
 .bong-mic:disabled { opacity: .5; cursor: not-allowed; }
 .bong-messages { background: rgba(255,255,255,.55); }
