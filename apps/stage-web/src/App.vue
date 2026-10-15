@@ -33,6 +33,8 @@ import { usePWAStore } from './stores/pwa'
 
 usePWAStore()
 
+const isBongBrowserPreview = import.meta.env.VITE_BONG_UI_PREVIEW === 'true'
+
 const contextBridgeStore = useContextBridgeStore()
 const authStore = useAuthStore()
 const i18n = useI18n()
@@ -122,7 +124,9 @@ watch(settings.themeColorsHueDynamic, () => {
 
 // Initialize first-time setup check when app mounts
 onMounted(async () => {
-  initializeAnalytics()
+  // Keep BÔNG's isolated browser QA lightweight and privacy-preserving.
+  if (!isBongBrowserPreview)
+    initializeAnalytics()
   await authStore.initialize()
   await displayModelsStore.initialize()
   await cardStore.initialize()
@@ -133,7 +137,7 @@ onMounted(async () => {
   // UI-only preview should never force account creation. The user may open
   // provider setup manually later; we do not persist a skipped flag or touch
   // any Windows/Electron onboarding behavior.
-  if (onboardingStore.needsOnboarding && import.meta.env.VITE_BONG_UI_PREVIEW !== 'true') {
+  if (onboardingStore.needsOnboarding && !isBongBrowserPreview) {
     onboardingStore.showingSetup = true
   }
 
@@ -146,8 +150,10 @@ onMounted(async () => {
   await settingsStore.initializeStageModel()
   await settingsAudioDeviceStore.initialize()
 
-  // Preload local inference models (Kokoro TTS, etc.) in background after a delay
-  inferencePreload.triggerPreload()
+  // BÔNG web uses an explicitly selected browser/Gemini TTS provider.
+  // Never download AIRI's unrelated local inference models for this preview.
+  if (!isBongBrowserPreview)
+    inferencePreload.triggerPreload()
 })
 
 onUnmounted(() => {
@@ -193,13 +199,14 @@ function handleSetupSkipped() {
 
   <!-- First Time Setup Dialog -->
   <OnboardingDialog
+    v-if="!isBongBrowserPreview"
     v-model="showingSetup"
     :extra-steps="onboardingExtraSteps"
     @configured="handleSetupConfigured"
     @skipped="handleSetupSkipped"
   />
 
-  <PerformanceOverlay />
+  <PerformanceOverlay v-if="!isBongBrowserPreview" />
 </template>
 
 <style>
