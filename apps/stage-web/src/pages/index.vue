@@ -24,6 +24,12 @@ import bongMascotUrl from '../../../stage-tamagotchi/src/renderer/public/bong-ma
 
 const isBongTextPreview = import.meta.env.VITE_BONG_UI_PREVIEW === 'true'
 const paused = ref(false)
+const bongPreviewSpeaking = ref(false)
+const bongPreviewMouth = ref(0)
+function handleBongMouth(payload: { speaking: boolean, mouth: number }) {
+  bongPreviewSpeaking.value = payload.speaking
+  bongPreviewMouth.value = payload.speaking ? Math.min(1, Math.max(0, payload.mouth)) : 0
+}
 
 function handleSettingsOpen(open: boolean) {
   paused.value = open
@@ -241,15 +247,17 @@ const cursorPosition = computed(() => ({
             :enable-orbit-controls="!isMobile"
             :paused="paused"
             :bong-preview-mode="isBongTextPreview"
+            :bong-preview-speaking="bongPreviewSpeaking"
+            :bong-preview-mouth-open="bongPreviewMouth"
           />
         </div>
-        <BongTextChat v-if="isBongTextPreview && !isMobile" data-testid="bong-chat-desktop" class="absolute bottom-4 right-4 z-30 flex h-[82dvh] w-[min(34vw,510px)] min-w-[360px] flex-col" />
+        <BongTextChat v-if="isBongTextPreview && !isMobile" data-testid="bong-chat-desktop" class="absolute bottom-4 right-4 z-30 flex h-[82dvh] w-[min(34vw,510px)] min-w-[360px] flex-col" @mouth="handleBongMouth" />
         <InteractiveArea v-else-if="!isMobile" h="85dvh" absolute right-4 flex flex-1 flex-col max-w="500px" min-w="30%" />
       </div>
       <HoloCoupon />
     </div>
     <Teleport to="body">
-      <BongTextChat v-if="isBongTextPreview && isMobile" class="fixed bottom-2 right-2 z-50 flex h-[55dvh] w-[calc(100vw-16px)] flex-col" data-testid="bong-chat-mobile" />
+      <BongTextChat v-if="isBongTextPreview && isMobile" class="fixed bottom-2 right-2 z-50 flex h-[55dvh] w-[calc(100vw-16px)] flex-col" data-testid="bong-chat-mobile" @mouth="handleBongMouth" />
       <MobileInteractiveArea
         v-else-if="isMobile"
         @settings-open="handleSettingsOpen"
