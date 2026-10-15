@@ -8,7 +8,7 @@
 2. Chỉ cấp quyền truy cập GitHub repository `Gamevalentine/B-ng` nếu có tùy chọn giới hạn.
 3. Tạo project Pages mới, ví dụ `bong-web-preview`, không chọn Worker `moeru-ai-airi` hoặc trang web đang dùng.
 4. **Production branch:** `bong/web-voice-chat-fix-20261016`. Đây là nhánh riêng của BÔNG; không sử dụng `main`.
-5. **Framework preset:** None. **Root directory:** repository root `/` (đừng chọn `apps/stage-web`, vì đây là pnpm monorepo).
+5. **Framework preset:** None. **Root directory:** để trống, dùng thư mục gốc repository (đừng chọn `apps/stage-web`, vì đây là pnpm monorepo).
 6. **Build command:** `pnpm install --frozen-lockfile --ignore-scripts && pnpm run build:bong-cloudflare`
 7. **Build output directory:** `apps/stage-web/dist`
 
