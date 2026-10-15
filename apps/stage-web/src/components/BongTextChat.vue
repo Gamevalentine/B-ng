@@ -9,7 +9,6 @@ import { BONG_GEMINI_VOICES, generateGeminiBongWav } from '../lib/bong-gemini-tt
 import { useSpeakingStore } from '@proj-airi/stage-ui/stores/audio'
 import { storeToRefs } from 'pinia'
 import { approximateBrowserMouth, extractBongWavEnvelope, sampleBongMouthOpen } from '../lib/bong-lipsync'
-import type { BongWavEnvelope } from '../lib/bong-lipsync'
 
 interface DisplayTurn extends BongTurn {
   id: number
