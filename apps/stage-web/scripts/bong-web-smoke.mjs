@@ -102,6 +102,7 @@ try {
       Object.defineProperty(window, 'SpeechSynthesisUtterance', { value: FakeUtterance, configurable: true })
       Object.defineProperty(window, 'speechSynthesis', { value: fakeSynthesis, configurable: true })
       window.__bongNeuralAudioPlays = 0
+      window.__bongBlockNextAudioPlay = false
       class FakeAudio {
         constructor(url) {
           this.src = url
@@ -113,6 +114,10 @@ try {
           window.__bongCurrentAudio = this
         }
         play() {
+          if (window.__bongBlockNextAudioPlay) {
+            window.__bongBlockNextAudioPlay = false
+            return Promise.reject(Object.assign(new Error('User gesture required'), { name: 'NotAllowedError' }))
+          }
           this.paused = false
           window.__bongNeuralAudioPlays++
           return Promise.resolve()
@@ -152,6 +157,7 @@ try {
       vietnameseMicrophonePassed: false,
       vietnameseBrowserTtsPassed: false,
       mockNeuralTtsPassed: false,
+      audioGestureRetryPassed: false,
       live2dMouthSyncPassed: false,
       errors: [],
       missingAssets: [],
@@ -368,6 +374,20 @@ try {
       await page.locator('[data-testid="bong-chat-desktop"][data-bong-speaking="false"][data-bong-mouth-open="0.000"], [data-testid="bong-chat-mobile"][data-bong-speaking="false"][data-bong-mouth-open="0.000"]').waitFor({ state: 'visible', timeout: 5000 })
       result.live2dMouthSyncPassed = true
       result.mockNeuralTtsPassed = true
+      // iOS/Safari regression: first asynchronous audio.play() may reject.
+      // Re-tapping Play must use the existing WAV, not consume another API request.
+      await page.evaluate(() => { window.__bongBlockNextAudioPlay = true })
+      const requestCountBeforeBlockedAudio = neuralTtsCalls.length
+      await page.locator('[data-testid="bong-tts-speak"]').last().click()
+      await page.locator('[data-testid="bong-tts-status"]').getByText(/không gọi lại Gemini/i).waitFor({ state: 'visible', timeout: 10000 })
+      if (neuralTtsCalls.length !== requestCountBeforeBlockedAudio + 1)
+        throw new Error('Browser-blocked audio did not make exactly one neural TTS request')
+      await page.locator('[data-testid="bong-tts-speak"]').last().click()
+      await page.locator('[data-testid="bong-chat-desktop"][data-bong-speaking="true"], [data-testid="bong-chat-mobile"][data-bong-speaking="true"]').waitFor({ state: 'visible', timeout: 8000 })
+      if (neuralTtsCalls.length !== requestCountBeforeBlockedAudio + 1)
+        throw new Error('Retrying audio playback unexpectedly spent another Gemini API request')
+      await page.locator('[data-testid="bong-tts-stop"]').click()
+      result.audioGestureRetryPassed = true
       await page.unrouteAll({ behavior: 'wait' })
       await page.locator('[data-testid="bong-mode-demo"]').click()
       result.aiApiCallsWithoutKey = noKeyRequests
@@ -376,7 +396,7 @@ try {
       result.textChatPassed = true
       result.errors = pageErrors.slice(0, 10)
       result.missingAssets = assetErrors.slice(0, 10)
-      if (!result.title.includes('BÔNG') || !result.headerText.includes('BÔNG') || result.headerText.includes('AIRI') || !result.brandingVisible || !result.brandAssetsLoaded || !result.textChatPassed || !result.mockGeminiMultiTurnPassed || !result.mockGeminiTransientRecoveryPassed || !result.vietnameseMicrophonePassed || !result.vietnameseBrowserTtsPassed || !result.mockNeuralTtsPassed || !result.live2dMouthSyncPassed || result.errors.length || result.missingAssets.length)
+      if (!result.title.includes('BÔNG') || !result.headerText.includes('BÔNG') || result.headerText.includes('AIRI') || !result.brandingVisible || !result.brandAssetsLoaded || !result.textChatPassed || !result.mockGeminiMultiTurnPassed || !result.mockGeminiTransientRecoveryPassed || !result.vietnameseMicrophonePassed || !result.vietnameseBrowserTtsPassed || !result.mockNeuralTtsPassed || !result.audioGestureRetryPassed || !result.live2dMouthSyncPassed || result.errors.length || result.missingAssets.length)
         throw new Error('BÔNG title/branding or desktop-source image assets did not load')
       // Canvas presence and JS errors are measured separately: a canvas is not proof
       // that the original BÔNG Live2D rig/voice implementation is operational.
