@@ -195,8 +195,8 @@ export default defineConfig({
           registerType: env.VITE_BONG_PAGES === 'true' ? 'autoUpdate' : 'prompt',
           includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
           manifest: {
-            name: 'AIRI',
-            short_name: 'AIRI',
+            name: env.VITE_BONG_UI_PREVIEW === 'true' ? 'BÔNG · Web thử nghiệm' : 'AIRI',
+            short_name: env.VITE_BONG_UI_PREVIEW === 'true' ? 'BÔNG' : 'AIRI',
             icons: [
               {
                 src: '/web-app-manifest-192x192.png',
