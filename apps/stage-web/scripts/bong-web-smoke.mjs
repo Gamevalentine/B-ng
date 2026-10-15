@@ -341,11 +341,25 @@ try {
       await page.locator('[data-testid="bong-tts-engine"]').selectOption('gemini')
       await page.locator('[data-testid="bong-gemini-tts-voice"]').selectOption('Leda')
       await page.locator('[data-testid="bong-tts-speak"]').last().click()
-      await page.waitForFunction(() => window.__bongNeuralAudioPlays > 0, { timeout: 12000 })
+      await page.waitForFunction(() => window.__bongNeuralAudioPlays > 0, null, { timeout: 12000 })
+      await page.waitForTimeout(600)
+      const mouthDebug = await page.evaluate(() => {
+        const c = document.querySelector('[data-testid="bong-text-chat"]')
+        return {
+          speaking: c?.getAttribute('data-bong-speaking'),
+          mouth: c?.getAttribute('data-bong-mouth-open'),
+          paused: window.__bongCurrentAudio?.paused,
+          currentTime: window.__bongCurrentAudio?.currentTime,
+          plays: window.__bongNeuralAudioPlays,
+        }
+      })
+      console.log('BÔNG 3C mouth playback diagnostics', JSON.stringify(mouthDebug))
+      if (mouthDebug.speaking !== 'true' || Number(mouthDebug.mouth) <= 0.05)
+        throw new Error('BÔNG Live2D mouth not opening: ' + JSON.stringify(mouthDebug))
       await page.waitForFunction(() => {
         const c = document.querySelector('[data-testid="bong-text-chat"]')
         return c?.getAttribute('data-bong-speaking') === 'true' && Number(c?.getAttribute('data-bong-mouth-open')) > 0.05
-      }, { timeout: 7000 })
+      }, null, { timeout: 7000 })
       if (neuralTtsCalls.length !== 1 || neuralTtsCalls[0].voice !== 'Leda'
         || neuralTtsCalls[0].apiKeyHeader !== 'browser-test-key-never-real'
         || neuralTtsCalls[0].url.includes('browser-test-key'))
