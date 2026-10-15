@@ -89,6 +89,11 @@ let currentAudio: HTMLAudioElement | undefined
 let currentAudioURL: string | undefined
 let voiceAbortController: AbortController | undefined
 let ttsGeneration = 0
+// iOS/Safari can block a play() started after an asynchronous TTS request.
+// Keep only the already-generated WAV for one user-initiated retry, never resend
+// that same audio request or store it outside this tab.
+let blockedPlayback: { id: number, text: string, voice: string, wav: Uint8Array } | undefined
+watch([apiKey, geminiTtsVoice], () => { blockedPlayback = undefined })
 
 function refreshVietnameseVoices() {
   if (!browserTtsSupported.value)
@@ -144,17 +149,23 @@ async function speakBongText(text: string, id: number) {
     const abort = new AbortController()
     voiceAbortController = abort
     speakingMessageId.value = id
-    ttsStatus.value = 'Gemini đang tạo giọng tiếng Việt...'
+    const voice = geminiTtsVoice.value
+    const cached = blockedPlayback?.id === id && blockedPlayback.text === clean && blockedPlayback.voice === voice
+      ? blockedPlayback.wav
+      : undefined
+    blockedPlayback = undefined
+    ttsStatus.value = cached ? 'Đang phát tệp giọng nói đã tạo...' : 'Gemini đang tạo giọng tiếng Việt...'
     try {
-      const wav = await generateGeminiBongWav({
+      // On a second tap, play the cached WAV synchronously after the click.
+      // It avoids another Gemini API call and restores browser user activation.
+      const wavBytes = cached ?? new Uint8Array(await generateGeminiBongWav({
         text: clean,
         key: apiKey.value,
-        voice: geminiTtsVoice.value,
+        voice,
         signal: abort.signal,
-      })
+      }))
       if (generation !== ttsGeneration || abort.signal.aborted)
         return
-      const wavBytes = new Uint8Array(wav)
       const url = URL.createObjectURL(new Blob([wavBytes], { type: 'audio/wav' }))
       currentAudioURL = url
       const player = new Audio(url)
@@ -169,7 +180,21 @@ async function speakBongText(text: string, id: number) {
         stopBongSpeech()
         ttsStatus.value = 'Trình duyệt không phát được âm thanh Gemini.'
       }
-      await player.play()
+      try {
+        await player.play()
+      }
+      catch (error) {
+        if (generation !== ttsGeneration)
+          return
+        if (error instanceof Error && error.name === 'NotAllowedError') {
+          // A click after asynchronous synthesis can lose its audio permission.
+          blockedPlayback = { id, text: clean, voice, wav: wavBytes }
+          stopBongSpeech()
+          ttsStatus.value = 'Trình duyệt chặn phát âm thanh. Nhấn “Nghe BÔNG đọc” một lần nữa để phát, không gọi lại Gemini.'
+          return
+        }
+        throw error
+      }
       if (generation !== ttsGeneration)
         return
       // Audio has started: use waveform RMS at the player's current position.
@@ -373,6 +398,7 @@ async function scrollToEnd() {
 function selectMode(value: 'demo' | 'gemini') {
   if (busy.value)
     return
+  blockedPlayback = undefined
   stopBongSpeech()
   ttsStatus.value = ''
   releaseSpeechRecognition()
@@ -389,6 +415,7 @@ function selectMode(value: 'demo' | 'gemini') {
 function clearConversation() {
   if (busy.value)
     return
+  blockedPlayback = undefined
   stopBongSpeech()
   ttsStatus.value = ''
   releaseSpeechRecognition()
@@ -412,6 +439,7 @@ async function sendMessage() {
     return
   }
 
+  blockedPlayback = undefined
   stopBongSpeech()
   error.value = ''
   retryNotice.value = ''
@@ -466,6 +494,7 @@ async function sendMessage() {
 }
 
 onUnmounted(() => {
+  blockedPlayback = undefined
   stopBongSpeech()
   if (browserTtsSupported.value)
     window.speechSynthesis.removeEventListener?.('voiceschanged', refreshVietnameseVoices)
