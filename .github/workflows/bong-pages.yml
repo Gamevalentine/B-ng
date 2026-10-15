@@ -1,0 +1,139 @@
+name: BONG Stable GitHub Pages Preview
+
+on:
+  push:
+    branches:
+      - bong-web-demo
+    paths:
+      - 'apps/stage-web/**'
+      - 'apps/stage-tamagotchi/src/renderer/public/bong-*.webp'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/bong-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: bong-stable-pages-preview
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and browser QA for GitHub Pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install project dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Test BÔNG text-chat adapter without external API calls
+        run: node --experimental-strip-types apps/stage-web/scripts/bong-chat-contract-test.mjs
+      - name: Verify Vietnamese Web Speech adapter without using a real microphone
+        run: node --experimental-strip-types apps/stage-web/scripts/bong-speech-contract-test.mjs
+      - name: Verify browser Vietnamese text-to-speech helpers without audio device
+        run: node --experimental-strip-types apps/stage-web/scripts/bong-tts-contract-test.mjs
+      - name: Verify opt-in Vietnamese Gemini TTS without real API calls
+        run: node --experimental-strip-types apps/stage-web/scripts/bong-gemini-tts-contract-test.mjs
+      - name: Verify waveform-driven Live2D mouth movement from recorded samples
+        run: node --experimental-strip-types apps/stage-web/scripts/bong-lipsync-contract-test.mjs
+      - name: Build BÔNG using repository-relative URLs
+        # Turbo defaults to strict environment filtering. Forward BONG_PAGES_BASE_PATH
+        # and VITE_BONG_* to the actual Vite build, not just the outer shell.
+        run: pnpm exec turbo run build -F @proj-airi/stage-web --env-mode=loose
+        env:
+          BONG_PAGES_BASE_PATH: '/B-ng/'
+          VITE_ENABLE_POSTHOG: 'false'
+          VITE_BONG_UI_PREVIEW: 'true'
+          VITE_BONG_PAGES: 'true'
+      - name: Verify GitHub Pages asset paths before testing
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs'
+          const html = readFileSync('apps/stage-web/dist/index.html', 'utf8')
+          const entry = html.match(/<script\s+type="module"[^>]*src="([^"]+)"/)
+          const style = html.match(/<link\s+rel="stylesheet"[^>]*href="([^"]+)"/)
+          if (!entry?.[1]?.startsWith('/B-ng/assets/') || !style?.[1]?.startsWith('/B-ng/assets/')) {
+            console.error('Build is unsafe for GitHub Pages: JavaScript/CSS are not under /B-ng/assets/.')
+            console.error('Script:', entry?.[1] ?? '(missing)')
+            console.error('Stylesheet:', style?.[1] ?? '(missing)')
+            process.exit(1)
+          }
+          const bad = [...html.matchAll(/(?:src|href)="(\/(?!B-ng\/)[^"]+)"/g)].map(match => match[1])
+          if (bad.length) {
+            console.error('Unprefixed public asset paths:', bad.slice(0, 12))
+            process.exit(1)
+          }
+          console.log('PASS: BÔNG script, styles, and public paths are prefixed /B-ng/.')
+          NODE
+      - name: Install Chromium for browser QA
+        run: pnpm exec playwright install chromium --with-deps
+      - name: Smoke test BÔNG from its future /B-ng/ path
+        shell: bash
+        env:
+          BONG_SMOKE_URL: 'http://127.0.0.1:4173/B-ng/'
+        run: |
+          set -euo pipefail
+          node apps/stage-web/scripts/bong-pages-static-preview.mjs > /tmp/bong-pages-static-server.log 2>&1 &
+          server_pid="$!"
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          node apps/stage-web/scripts/bong-web-smoke.mjs
+      - name: Archive screenshots and QA report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bong-pages-browser-qa
+          path: bong-web-smoke-results/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Remove developer-only source maps from public site
+        shell: bash
+        run: |
+          set -euo pipefail
+          find apps/stage-web/dist -type f -name '*.map' -delete
+          test -s apps/stage-web/dist/index.html
+          # GitHub Pages serves 404.html as the SPA fallback for client-side navigation.
+          cp apps/stage-web/dist/index.html apps/stage-web/dist/404.html
+          touch apps/stage-web/dist/.nojekyll
+      - name: Confirm GitHub Pages site configuration
+        uses: actions/configure-pages@v5
+      - name: Package GitHub Pages website
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: apps/stage-web/dist/
+
+  deploy:
+    name: Publish stable HTTPS website
+    runs-on: ubuntu-latest
+    needs: build
+    # Deploy preview branch without modifying rules on GitHub's protected github-pages environment.
+    environment:
+      name: bong-pages-preview
+      url: ${{ steps.deploy_pages.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    steps:
+      - name: Publish to GitHub Pages
+        id: deploy_pages
+        uses: actions/deploy-pages@v4
+      - name: Show website URL
+        run: |
+          echo "BÔNG website: ${{ steps.deploy_pages.outputs.page_url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "This is a stage/UI preview, not the Windows/Mai Chi/Sherpa production runtime." >> "$GITHUB_STEP_SUMMARY"

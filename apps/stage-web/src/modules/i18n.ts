@@ -7,8 +7,8 @@ function getLocale() {
   let language = localStorage.getItem('settings/language')
 
   if (!language) {
-    // Fallback to browser language
-    language = navigator.language || 'en'
+    // New BÔNG preview visitors start in Vietnamese; respect any saved preference.
+    language = 'vi'
   }
 
   return resolveSupportedLocale(language, Object.keys(messages!))
@@ -17,6 +17,6 @@ function getLocale() {
 export const i18n = createI18n({
   legacy: false,
   locale: getLocale(),
-  fallbackLocale: 'en',
+  fallbackLocale: 'vi',
   messages,
 })

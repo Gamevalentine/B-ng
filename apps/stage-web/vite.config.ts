@@ -38,6 +38,8 @@ function hasFlagEnableMkcert(): boolean {
 }
 
 export default defineConfig({
+  // Only the GitHub Pages build uses the repository subpath. Cloudflare and local web builds remain at /.
+  base: env.BONG_PAGES_BASE_PATH || '/',
   optimizeDeps: {
     exclude: [
       // Internal Packages
@@ -186,7 +188,11 @@ export default defineConfig({
     ...(env.TARGET_HUGGINGFACE_SPACE
       ? []
       : [VitePWA({
-          registerType: 'prompt',
+          // The GitHub Pages demo is a continuously updated UI preview, not an offline PWA.
+          // Retire the old Workbox SW + cache that can serve stale AIRI chat after deployment.
+          // Keep the plugin registered so virtual:pwa-register still resolves in Vite.
+          selfDestroying: env.VITE_BONG_PAGES === 'true',
+          registerType: env.VITE_BONG_PAGES === 'true' ? 'autoUpdate' : 'prompt',
           includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
           manifest: {
             name: 'AIRI',

@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import Header from '@proj-airi/stage-layouts/components/Layouts/Header.vue'
 import InteractiveArea from '@proj-airi/stage-layouts/components/Layouts/InteractiveArea.vue'
-import MobileHeader from '@proj-airi/stage-layouts/components/Layouts/MobileHeader.vue'
 import MobileInteractiveArea from '@proj-airi/stage-layouts/components/Layouts/MobileInteractiveArea.vue'
 import workletUrl from '@proj-airi/stage-ui/workers/vad/process.worklet?worker&url'
 
@@ -19,8 +17,19 @@ import { useSettings, useSettingsAudioDevice } from '@proj-airi/stage-ui/stores/
 import { breakpointsTailwind, useBreakpoints, useMouse } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from 'vue'
+import BongHeader from '../components/BongHeader.vue'
+import BongTextChat from '../components/BongTextChat.vue'
+import bongLogoUrl from '../../../stage-tamagotchi/src/renderer/public/bong-logo.webp?url'
+import bongMascotUrl from '../../../stage-tamagotchi/src/renderer/public/bong-mascot.webp?url'
 
+const isBongTextPreview = import.meta.env.VITE_BONG_UI_PREVIEW === 'true'
 const paused = ref(false)
+const bongPreviewSpeaking = ref(false)
+const bongPreviewMouth = ref(0)
+function handleBongMouth(payload: { speaking: boolean, mouth: number }) {
+  bongPreviewSpeaking.value = payload.speaking
+  bongPreviewMouth.value = payload.speaking ? Math.min(1, Math.max(0, payload.mouth)) : 0
+}
 
 function handleSettingsOpen(open: boolean) {
   paused.value = open
@@ -209,8 +218,17 @@ const cursorPosition = computed(() => ({
     >
       <!-- header -->
       <div class="px-0 py-1 md:px-3 md:py-3" w-full gap-2>
-        <Header class="hidden md:flex" />
-        <MobileHeader class="flex md:hidden" />
+        <BongHeader class="hidden md:flex" />
+        <BongHeader mobile class="flex md:hidden" />
+        <!-- Brand assets are reused from the BÔNG desktop source, not recreated mock artwork. -->
+        <div class="pointer-events-none absolute left-3 top-16 z-20 flex items-center gap-2 rounded-2xl bg-black/65 px-3 py-2 text-white shadow-lg backdrop-blur-sm md:left-6 md:top-20" data-testid="bong-web-preview-mark">
+          <img :src="bongLogoUrl" alt="Logo BÔNG" class="h-9 w-9 object-contain" data-testid="bong-original-logo">
+          <div class="text-left">
+            <div class="text-sm font-bold tracking-wide">BÔNG</div>
+            <div class="text-[10px] opacity-80">Bản web thử nghiệm · chưa phải bản Windows</div>
+          </div>
+          <img :src="bongMascotUrl" alt="Linh vật BÔNG gốc" class="h-9 w-9 rounded-lg object-contain" data-testid="bong-original-mascot">
+        </div>
       </div>
       <!-- page -->
       <div relative flex="~ 1 row gap-y-0 gap-x-2 <md:col">
@@ -228,15 +246,20 @@ const cursorPosition = computed(() => ({
             :cursor-position="cursorPosition"
             :enable-orbit-controls="!isMobile"
             :paused="paused"
+            :bong-preview-mode="isBongTextPreview"
+            :bong-preview-speaking="bongPreviewSpeaking"
+            :bong-preview-mouth-open="bongPreviewMouth"
           />
         </div>
-        <InteractiveArea v-if="!isMobile" h="85dvh" absolute right-4 flex flex-1 flex-col max-w="500px" min-w="30%" />
+        <BongTextChat v-if="isBongTextPreview && !isMobile" data-testid="bong-chat-desktop" class="absolute bottom-4 right-4 z-30 flex h-[82dvh] w-[min(34vw,510px)] min-w-[360px] flex-col" @mouth="handleBongMouth" />
+        <InteractiveArea v-else-if="!isMobile" h="85dvh" absolute right-4 flex flex-1 flex-col max-w="500px" min-w="30%" />
       </div>
       <HoloCoupon />
     </div>
     <Teleport to="body">
+      <BongTextChat v-if="isBongTextPreview && isMobile" class="fixed bottom-2 right-2 z-50 flex h-[55dvh] w-[calc(100vw-16px)] flex-col" data-testid="bong-chat-mobile" @mouth="handleBongMouth" />
       <MobileInteractiveArea
-        v-if="isMobile"
+        v-else-if="isMobile"
         @settings-open="handleSettingsOpen"
         @stage-viewport-change="stageViewport = $event"
       />
