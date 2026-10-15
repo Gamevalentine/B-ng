@@ -11,7 +11,9 @@
   "license": "MIT",
   "scripts": {
     "build": "vite build",
+    "build:bong-preview": "vite build --mode bong-preview",
     "dev": "vite --host",
+    "dev:bong-preview": "vite --mode bong-preview --host",
     "dev:https": "vite --host -- --mkcert",
     "lint": "eslint .",
     "preview": "vite preview",
