@@ -6,6 +6,10 @@ import { DEFAULT_GEMINI_MODEL, generateBongReply, offlinePreviewReply } from '..
 import type { BongTurn } from '../lib/bong-chat'
 import { BONG_SYSTEM_VOICE, BONG_TTS_NOTICE, chooseVietnameseVoice, clampBongSpeechRate, prepareVietnameseSpeech } from '../lib/bong-tts-browser'
 import { BONG_GEMINI_VOICES, generateGeminiBongWav } from '../lib/bong-gemini-tts'
+import { useSpeakingStore } from '@proj-airi/stage-ui/stores/audio'
+import { storeToRefs } from 'pinia'
+import { approximateBrowserMouth, extractBongWavEnvelope, sampleBongMouthOpen } from '../lib/bong-lipsync'
+import type { BongWavEnvelope } from '../lib/bong-lipsync'
 
 interface DisplayTurn extends BongTurn {
   id: number
@@ -32,6 +36,49 @@ const geminiTtsVoice = ref('Leda')
 const ttsRate = ref(1)
 const ttsStatus = ref('')
 const speakingMessageId = ref<number | null>(null)
+const { nowSpeaking, mouthOpenSize } = storeToRefs(useSpeakingStore())
+let mouthFrameId: number | undefined
+
+function closeBongMouth() {
+  if (mouthFrameId !== undefined)
+    cancelAnimationFrame(mouthFrameId)
+  mouthFrameId = undefined
+  nowSpeaking.value = false
+  mouthOpenSize.value = 0
+}
+
+function startBongMouthFromAudio(player: HTMLAudioElement, wav: Uint8Array, generation: number) {
+  const envelope = extractBongWavEnvelope(wav)
+  closeBongMouth()
+  nowSpeaking.value = true
+  function tick() {
+    if (generation !== ttsGeneration || currentAudio !== player || player.paused || player.ended) {
+      closeBongMouth()
+      return
+    }
+    const target = sampleBongMouthOpen(envelope, player.currentTime)
+    // 50% smoothing damps jitter without delaying pauses for long.
+    mouthOpenSize.value = Math.max(0, Math.min(1, mouthOpenSize.value * 0.5 + target * 0.5))
+    mouthFrameId = requestAnimationFrame(tick)
+  }
+  tick()
+}
+
+function startBongBrowserMouth(generation: number) {
+  closeBongMouth()
+  nowSpeaking.value = true
+  const startedAt = performance.now()
+  function tick() {
+    if (generation !== ttsGeneration || !currentUtterance) {
+      closeBongMouth()
+      return
+    }
+    mouthOpenSize.value = approximateBrowserMouth(performance.now(), startedAt)
+    mouthFrameId = requestAnimationFrame(tick)
+  }
+  tick()
+}
+
 let currentUtterance: SpeechSynthesisUtterance | undefined
 let currentAudio: HTMLAudioElement | undefined
 let currentAudioURL: string | undefined
@@ -50,6 +97,7 @@ function refreshVietnameseVoices() {
 }
 
 function stopBongSpeech() {
+  closeBongMouth()
   ttsGeneration++
   voiceAbortController?.abort()
   voiceAbortController = undefined
@@ -113,8 +161,14 @@ async function speakBongText(text: string, id: number) {
         ttsStatus.value = 'Trình duyệt không phát được âm thanh Gemini.'
       }
       await player.play()
+      if (generation !== ttsGeneration)
+        return
+      // Audio has started: use waveform RMS at the player's current position.
+      // Invalid formats are supported for playback but cannot drive mouth motion.
+      try { startBongMouthFromAudio(player, wavBytes, generation) }
+      catch { closeBongMouth() }
       if (generation === ttsGeneration)
-        ttsStatus.value = 'Đang đọc bằng giọng AI tiếng Việt (chưa phải Mai Chi).'
+        ttsStatus.value = 'Đang nói · miệng Live2D theo âm thanh Gemini.'
     }
     catch (err) {
       if (generation !== ttsGeneration) return
@@ -152,16 +206,20 @@ async function speakBongText(text: string, id: number) {
     utterance.onstart = () => {
       if (ttsGeneration !== generation) return
       speakingMessageId.value = id
-      ttsStatus.value = useSystemDefault ? 'Đang thử giọng hệ thống; tiếng Việt có thể chưa chuẩn.' : 'BÔNG đang đọc...'
+      // Browser speech synthesis has no PCM output, so mouth movement is an approximation.
+      startBongBrowserMouth(generation)
+      ttsStatus.value = useSystemDefault ? 'Giọng hệ thống · miệng chuyển động mô phỏng.' : 'BÔNG đang đọc bằng giọng trình duyệt...'
     }
     utterance.onend = () => {
       if (ttsGeneration !== generation) return
+      closeBongMouth()
       speakingMessageId.value = null
       currentUtterance = undefined
       ttsStatus.value = 'Đã đọc xong.'
     }
     utterance.onerror = () => {
       if (ttsGeneration !== generation) return
+      closeBongMouth()
       speakingMessageId.value = null
       currentUtterance = undefined
       ttsStatus.value = 'Không phát được giọng nói. Hãy chọn giọng khác hoặc thử lại.'
@@ -171,6 +229,7 @@ async function speakBongText(text: string, id: number) {
     window.speechSynthesis.speak(utterance)
   }
   catch {
+    closeBongMouth()
     speakingMessageId.value = null
     currentUtterance = undefined
     ttsStatus.value = 'Trình duyệt không phát được âm thanh tiếng Việt.'
@@ -403,7 +462,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="bong-chat flex flex-col overflow-hidden" aria-label="Hội thoại BÔNG" data-testid="bong-text-chat">
+  <section class="bong-chat flex flex-col overflow-hidden" aria-label="Hội thoại BÔNG" data-testid="bong-text-chat" :data-bong-mouth-open="mouthOpenSize.toFixed(3)" :data-bong-speaking="nowSpeaking ? 'true' : 'false'">
     <div class="bong-chat-head flex flex-col gap-2">
       <div class="flex items-center justify-between gap-2">
         <strong class="text-sm">BÔNG <span class="font-normal opacity-60">· Trò chuyện</span></strong>
