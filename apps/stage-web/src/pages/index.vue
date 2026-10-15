@@ -240,6 +240,7 @@ const cursorPosition = computed(() => ({
             :cursor-position="cursorPosition"
             :enable-orbit-controls="!isMobile"
             :paused="paused"
+            :bong-preview-mode="isBongTextPreview"
           />
         </div>
         <BongTextChat v-if="isBongTextPreview && !isMobile" data-testid="bong-chat-desktop" class="absolute bottom-4 right-4 z-30 flex h-[82dvh] w-[min(34vw,510px)] min-w-[360px] flex-col" />
