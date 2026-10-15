@@ -221,19 +221,19 @@ const cursorPosition = computed(() => ({
         <BongHeader class="hidden md:flex" />
         <BongHeader mobile class="flex md:hidden" />
         <!-- Brand assets are reused from the BÔNG desktop source, not recreated mock artwork. -->
-        <div class="pointer-events-none absolute left-3 top-16 z-20 flex items-center gap-2 rounded-2xl bg-black/65 px-3 py-2 text-white shadow-lg backdrop-blur-sm md:left-6 md:top-20" data-testid="bong-web-preview-mark">
-          <img :src="bongLogoUrl" alt="Logo BÔNG" class="h-9 w-9 object-contain" data-testid="bong-original-logo">
+        <div v-if="isBongTextPreview" class="pointer-events-none absolute left-2 top-14 z-20 flex items-center gap-1 rounded-xl bg-black/55 px-2 py-1 text-white shadow-md backdrop-blur-sm md:left-4 md:top-16" data-testid="bong-web-preview-mark">
+          <img :src="bongLogoUrl" alt="Logo BÔNG" class="h-6 w-6 object-contain" data-testid="bong-original-logo">
           <div class="text-left">
-            <div class="text-sm font-bold tracking-wide">BÔNG</div>
-            <div class="text-[10px] opacity-80">Bản web thử nghiệm · chưa phải bản Windows</div>
+            <div class="text-xs font-bold tracking-wide">BÔNG <span class="font-normal opacity-70">· bản thử nghiệm</span></div>
           </div>
-          <img :src="bongMascotUrl" alt="Linh vật BÔNG gốc" class="h-9 w-9 rounded-lg object-contain" data-testid="bong-original-mascot">
+          <img :src="bongMascotUrl" alt="Linh vật BÔNG gốc" class="h-6 w-6 rounded-md object-contain" data-testid="bong-original-mascot">
         </div>
       </div>
       <!-- page -->
       <div relative flex="~ 1 row gap-y-0 gap-x-2 <md:col">
         <div relative flex-1 min-w="1/2">
           <div
+            v-if="!isBongTextPreview"
             absolute left-0 z-15 px-3
             :class="[
               stageModelRenderer === 'live2d' ? 'top-0 h-full py-[20vh]' : 'top-1/2 -translate-y-1/2',
@@ -251,13 +251,13 @@ const cursorPosition = computed(() => ({
             :bong-preview-mouth-open="bongPreviewMouth"
           />
         </div>
-        <BongTextChat v-if="isBongTextPreview && !isMobile" data-testid="bong-chat-desktop" class="absolute bottom-4 right-4 z-30 flex h-[82dvh] w-[min(34vw,510px)] min-w-[360px] flex-col" @mouth="handleBongMouth" />
+        <BongTextChat v-if="isBongTextPreview && !isMobile" data-testid="bong-chat-desktop" class="pointer-events-auto absolute bottom-4 right-4 z-40 flex h-[82dvh] w-[min(36vw,510px)] min-w-[340px] flex-col" @mouth="handleBongMouth" />
         <InteractiveArea v-else-if="!isMobile" h="85dvh" absolute right-4 flex flex-1 flex-col max-w="500px" min-w="30%" />
       </div>
-      <HoloCoupon />
+      <HoloCoupon v-if="!isBongTextPreview" />
     </div>
     <Teleport to="body">
-      <BongTextChat v-if="isBongTextPreview && isMobile" class="fixed bottom-2 right-2 z-50 flex h-[55dvh] w-[calc(100vw-16px)] flex-col" data-testid="bong-chat-mobile" @mouth="handleBongMouth" />
+      <BongTextChat v-if="isBongTextPreview && isMobile" class="pointer-events-auto fixed bottom-2 right-2 z-50 flex h-[68dvh] w-[calc(100vw-16px)] flex-col" data-testid="bong-chat-mobile" @mouth="handleBongMouth" />
       <MobileInteractiveArea
         v-else-if="isMobile"
         @settings-open="handleSettingsOpen"
