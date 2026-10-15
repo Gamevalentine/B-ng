@@ -103,9 +103,22 @@ try {
       Object.defineProperty(window, 'speechSynthesis', { value: fakeSynthesis, configurable: true })
       window.__bongNeuralAudioPlays = 0
       class FakeAudio {
-        constructor(url) { this.src = url; this.onended = null; this.onerror = null }
-        play() { window.__bongNeuralAudioPlays++; return Promise.resolve() }
-        pause() {}
+        constructor(url) {
+          this.src = url
+          this.onended = null
+          this.onerror = null
+          this.paused = true
+          this.ended = false
+          this.currentTime = 0.065
+          window.__bongCurrentAudio = this
+        }
+        play() {
+          this.paused = false
+          window.__bongNeuralAudioPlays++
+          return Promise.resolve()
+        }
+        pause() { this.paused = true }
+        finish() { this.ended = true; this.onended?.() }
       }
       Object.defineProperty(window, 'Audio', { value: FakeAudio, configurable: true })
     })
@@ -139,6 +152,7 @@ try {
       vietnameseMicrophonePassed: false,
       vietnameseBrowserTtsPassed: false,
       mockNeuralTtsPassed: false,
+      live2dMouthSyncPassed: false,
       errors: [],
       missingAssets: [],
     }
@@ -266,7 +280,13 @@ try {
             contentType: 'application/json',
             headers,
             body: JSON.stringify({ candidates: [{ content: { parts: [{
-              inlineData: { data: Buffer.alloc(4800).toString('base64'), mimeType: 'audio/l16; rate=24000; channels=1' },
+              inlineData: { data: (() => {
+                const pcm = Buffer.alloc(4800)
+                // 2.4k samples. Loud speech in the first 0.1s.
+                for (let i = 0; i < 2400; i++)
+                  pcm.writeInt16LE(Math.round(11000 * Math.sin(2 * Math.PI * 250 * i / 24000)), i * 2)
+                return pcm.toString('base64')
+              })(), mimeType: 'audio/l16; rate=24000; channels=1' },
             }] } }] }),
           })
           return
@@ -322,11 +342,25 @@ try {
       await page.locator('[data-testid="bong-gemini-tts-voice"]').selectOption('Leda')
       await page.locator('[data-testid="bong-tts-speak"]').last().click()
       await page.waitForFunction(() => window.__bongNeuralAudioPlays > 0, { timeout: 12000 })
+      await page.waitForFunction(() => {
+        const c = document.querySelector('[data-testid="bong-text-chat"]')
+        return c?.getAttribute('data-bong-speaking') === 'true' && Number(c?.getAttribute('data-bong-mouth-open')) > 0.05
+      }, { timeout: 7000 })
       if (neuralTtsCalls.length !== 1 || neuralTtsCalls[0].voice !== 'Leda'
         || neuralTtsCalls[0].apiKeyHeader !== 'browser-test-key-never-real'
         || neuralTtsCalls[0].url.includes('browser-test-key'))
         throw new Error('Vietnamese Gemini TTS call, user-selected voice or secret handling incorrect')
       await page.locator('[data-testid="bong-tts-stop"]').click()
+      await page.waitForFunction(() => {
+        const c = document.querySelector('[data-testid="bong-text-chat"]')
+        return c?.getAttribute('data-bong-speaking') === 'false' && Number(c?.getAttribute('data-bong-mouth-open')) === 0
+      }, { timeout: 5000 })
+      // Test natural end, not only user clicking Stop.
+      await page.locator('[data-testid="bong-tts-speak"]').last().click()
+      await page.waitForFunction(() => document.querySelector('[data-testid="bong-text-chat"]')?.getAttribute('data-bong-speaking') === 'true', { timeout: 10000 })
+      await page.evaluate(() => window.__bongCurrentAudio.finish())
+      await page.waitForFunction(() => document.querySelector('[data-testid="bong-text-chat"]')?.getAttribute('data-bong-speaking') === 'false', { timeout: 5000 })
+      result.live2dMouthSyncPassed = true
       result.mockNeuralTtsPassed = true
       await page.unrouteAll({ behavior: 'wait' })
       await page.locator('[data-testid="bong-mode-demo"]').click()
@@ -336,7 +370,7 @@ try {
       result.textChatPassed = true
       result.errors = pageErrors.slice(0, 10)
       result.missingAssets = assetErrors.slice(0, 10)
-      if (!result.title.includes('BÔNG') || !result.headerText.includes('BÔNG') || result.headerText.includes('AIRI') || !result.brandingVisible || !result.brandAssetsLoaded || !result.textChatPassed || !result.mockGeminiMultiTurnPassed || !result.mockGeminiTransientRecoveryPassed || !result.vietnameseMicrophonePassed || !result.vietnameseBrowserTtsPassed || !result.mockNeuralTtsPassed || result.errors.length || result.missingAssets.length)
+      if (!result.title.includes('BÔNG') || !result.headerText.includes('BÔNG') || result.headerText.includes('AIRI') || !result.brandingVisible || !result.brandAssetsLoaded || !result.textChatPassed || !result.mockGeminiMultiTurnPassed || !result.mockGeminiTransientRecoveryPassed || !result.vietnameseMicrophonePassed || !result.vietnameseBrowserTtsPassed || !result.mockNeuralTtsPassed || !result.live2dMouthSyncPassed || result.errors.length || result.missingAssets.length)
         throw new Error('BÔNG title/branding or desktop-source image assets did not load')
       // Canvas presence and JS errors are measured separately: a canvas is not proof
       // that the original BÔNG Live2D rig/voice implementation is operational.
