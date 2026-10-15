@@ -116,6 +116,11 @@ function stopBongSpeech() {
     window.speechSynthesis.cancel()
 }
 
+function stopBongSpeechAndReport() {
+  stopBongSpeech()
+  ttsStatus.value = 'Đã dừng đọc.'
+}
+
 async function speakBongText(text: string, id: number) {
   if (speakingMessageId.value === id) {
     stopBongSpeech()
@@ -608,7 +613,7 @@ onUnmounted(() => {
       <p v-if="interimTranscript" class="text-xs opacity-75" data-testid="bong-speech-interim">Đang nhận diện: {{ interimTranscript }}</p>
       <div v-if="ttsStatus" class="flex items-center justify-between gap-2 text-xs" data-testid="bong-tts-status" role="status">
         <span>{{ ttsStatus }}</span>
-        <button v-if="speakingMessageId !== null" type="button" data-testid="bong-tts-stop" class="bong-clear rounded px-2 py-1" @click="stopBongSpeech">Dừng phát</button>
+        <button v-if="speakingMessageId !== null" type="button" data-testid="bong-tts-stop" class="bong-clear rounded px-2 py-1" @click="stopBongSpeechAndReport">Dừng phát</button>
       </div>
       <form class="flex gap-2" @submit.prevent="sendMessage">
         <button
