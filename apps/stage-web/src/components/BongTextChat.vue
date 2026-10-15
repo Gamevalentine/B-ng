@@ -5,6 +5,7 @@ import type { BrowserSpeechRecognition } from '../lib/bong-speech'
 import { DEFAULT_GEMINI_MODEL, generateBongReply, offlinePreviewReply } from '../lib/bong-chat'
 import type { BongTurn } from '../lib/bong-chat'
 import { BONG_SYSTEM_VOICE, BONG_TTS_NOTICE, chooseVietnameseVoice, clampBongSpeechRate, prepareVietnameseSpeech } from '../lib/bong-tts-browser'
+import { BONG_GEMINI_VOICES, generateGeminiBongWav } from '../lib/bong-gemini-tts'
 
 interface DisplayTurn extends BongTurn {
   id: number
@@ -26,10 +27,15 @@ const vietnameseVoices = ref<{ uri: string, name: string, lang: string }[]>([])
 const selectedVoiceURI = ref(BONG_SYSTEM_VOICE)
 const systemVoiceSelectedManually = ref(false)
 const autoReadAloud = ref(false)
+const ttsEngine = ref<'gemini' | 'browser'>('gemini')
+const geminiTtsVoice = ref('Leda')
 const ttsRate = ref(1)
 const ttsStatus = ref('')
 const speakingMessageId = ref<number | null>(null)
 let currentUtterance: SpeechSynthesisUtterance | undefined
+let currentAudio: HTMLAudioElement | undefined
+let currentAudioURL: string | undefined
+let voiceAbortController: AbortController | undefined
 let ttsGeneration = 0
 
 function refreshVietnameseVoices() {
@@ -45,33 +51,92 @@ function refreshVietnameseVoices() {
 
 function stopBongSpeech() {
   ttsGeneration++
+  voiceAbortController?.abort()
+  voiceAbortController = undefined
   currentUtterance = undefined
+  currentAudio?.pause()
+  currentAudio = undefined
+  if (currentAudioURL)
+    URL.revokeObjectURL(currentAudioURL)
+  currentAudioURL = undefined
   speakingMessageId.value = null
   if (browserTtsSupported.value)
     window.speechSynthesis.cancel()
 }
 
-function speakBongText(text: string, id: number) {
+async function speakBongText(text: string, id: number) {
   if (speakingMessageId.value === id) {
     stopBongSpeech()
     ttsStatus.value = 'Đã dừng đọc.'
     return
   }
   stopBongSpeech()
+  const clean = prepareVietnameseSpeech(text)
+  if (!clean) {
+    ttsStatus.value = 'Tin nhắn không có nội dung phù hợp để đọc.'
+    return
+  }
+  if (ttsEngine.value === 'gemini') {
+    if (mode.value !== 'gemini' || !apiKey.value.trim()) {
+      ttsStatus.value = 'Hãy chọn AI thật và nhập Gemini API key trong ⚙ Cài đặt để thử giọng nữ tiếng Việt.'
+      return
+    }
+    // Explicit click or auto-read opt-in only. Never auto-bill or retry failed TTS.
+    releaseSpeechRecognition()
+    const generation = ++ttsGeneration
+    const abort = new AbortController()
+    voiceAbortController = abort
+    speakingMessageId.value = id
+    ttsStatus.value = 'Gemini đang tạo giọng tiếng Việt...'
+    try {
+      const wav = await generateGeminiBongWav({
+        text: clean,
+        key: apiKey.value,
+        voice: geminiTtsVoice.value,
+        signal: abort.signal,
+      })
+      if (generation !== ttsGeneration || abort.signal.aborted)
+        return
+      const wavBytes = new Uint8Array(wav)
+      const url = URL.createObjectURL(new Blob([wavBytes], { type: 'audio/wav' }))
+      currentAudioURL = url
+      const player = new Audio(url)
+      currentAudio = player
+      player.onended = () => {
+        if (generation !== ttsGeneration) return
+        stopBongSpeech()
+        ttsStatus.value = 'Đã đọc xong.'
+      }
+      player.onerror = () => {
+        if (generation !== ttsGeneration) return
+        stopBongSpeech()
+        ttsStatus.value = 'Trình duyệt không phát được âm thanh Gemini.'
+      }
+      await player.play()
+      if (generation === ttsGeneration)
+        ttsStatus.value = 'Đang đọc bằng giọng AI tiếng Việt (chưa phải Mai Chi).'
+    }
+    catch (err) {
+      if (generation !== ttsGeneration) return
+      const message = err instanceof Error ? err.message : 'Không tạo được giọng AI.'
+      stopBongSpeech()
+      ttsStatus.value = message
+    }
+    finally {
+      if (voiceAbortController === abort)
+        voiceAbortController = undefined
+    }
+    return
+  }
   if (!browserTtsSupported.value) {
-    ttsStatus.value = 'Trình duyệt không hỗ trợ chức năng phát giọng nói.'
+    ttsStatus.value = 'Trình duyệt không hỗ trợ giọng đọc hệ thống.'
     return
   }
   refreshVietnameseVoices()
   const useSystemDefault = selectedVoiceURI.value === BONG_SYSTEM_VOICE
   const voice = useSystemDefault ? undefined : chooseVietnameseVoice(window.speechSynthesis.getVoices(), selectedVoiceURI.value)
   if (!voice && !useSystemDefault) {
-    ttsStatus.value = 'Giọng không còn khả dụng. Hãy chọn “Giọng hệ thống” để thử.'
-    return
-  }
-  const clean = prepareVietnameseSpeech(text)
-  if (!clean) {
-    ttsStatus.value = 'Tin nhắn không có nội dung phù hợp để đọc.'
+    ttsStatus.value = 'Không tìm thấy giọng tiếng Việt trên Chrome.'
     return
   }
   const generation = ++ttsGeneration
@@ -118,7 +183,7 @@ function speakBongMessage(item: DisplayTurn) {
 }
 
 function maybeReadBongReply(item: DisplayTurn) {
-  if (autoReadAloud.value && browserTtsSupported.value)
+  if (autoReadAloud.value)
     speakBongText(item.text, item.id)
 }
 
