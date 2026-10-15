@@ -342,10 +342,10 @@ try {
       await page.locator('[data-testid="bong-gemini-tts-voice"]').selectOption('Leda')
       await page.locator('[data-testid="bong-tts-speak"]').last().click()
       await page.waitForFunction(() => window.__bongNeuralAudioPlays > 0, null, { timeout: 12000 })
-      await page.locator('[data-testid="bong-text-chat"][data-bong-speaking="true"]').waitFor({ state: 'visible', timeout: 8000 })
+      await page.locator('[data-testid="bong-chat-desktop"][data-bong-speaking="true"], [data-testid="bong-chat-mobile"][data-bong-speaking="true"]').waitFor({ state: 'visible', timeout: 8000 })
       await page.waitForTimeout(350)
       // Playwright's CSS locator pierces nested open ShadowRoots; document.querySelector does not.
-      const mouthRoot = page.locator('[data-testid="bong-text-chat"]')
+      const mouthRoot = page.locator('[data-testid="bong-chat-desktop"], [data-testid="bong-chat-mobile"]')
       const mouthDebug = {
         speaking: await mouthRoot.getAttribute('data-bong-speaking'),
         mouth: await mouthRoot.getAttribute('data-bong-mouth-open'),
@@ -359,12 +359,12 @@ try {
         || neuralTtsCalls[0].url.includes('browser-test-key'))
         throw new Error('Vietnamese Gemini TTS call, user-selected voice or secret handling incorrect')
       await page.locator('[data-testid="bong-tts-stop"]').click()
-      await page.locator('[data-testid="bong-text-chat"][data-bong-speaking="false"][data-bong-mouth-open="0.000"]').waitFor({ state: 'visible', timeout: 5000 })
+      await page.locator('[data-testid="bong-chat-desktop"][data-bong-speaking="false"][data-bong-mouth-open="0.000"], [data-testid="bong-chat-mobile"][data-bong-speaking="false"][data-bong-mouth-open="0.000"]').waitFor({ state: 'visible', timeout: 5000 })
       // Test natural end, not only user clicking Stop.
       await page.locator('[data-testid="bong-tts-speak"]').last().click()
-      await page.locator('[data-testid="bong-text-chat"][data-bong-speaking="true"]').waitFor({ state: 'visible', timeout: 10000 })
+      await page.locator('[data-testid="bong-chat-desktop"][data-bong-speaking="true"], [data-testid="bong-chat-mobile"][data-bong-speaking="true"]').waitFor({ state: 'visible', timeout: 10000 })
       await page.evaluate(() => window.__bongCurrentAudio.finish())
-      await page.locator('[data-testid="bong-text-chat"][data-bong-speaking="false"][data-bong-mouth-open="0.000"]').waitFor({ state: 'visible', timeout: 5000 })
+      await page.locator('[data-testid="bong-chat-desktop"][data-bong-speaking="false"][data-bong-mouth-open="0.000"], [data-testid="bong-chat-mobile"][data-bong-speaking="false"][data-bong-mouth-open="0.000"]').waitFor({ state: 'visible', timeout: 5000 })
       result.live2dMouthSyncPassed = true
       result.mockNeuralTtsPassed = true
       await page.unrouteAll({ behavior: 'wait' })
