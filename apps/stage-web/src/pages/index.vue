@@ -171,6 +171,10 @@ function stopAudioInteraction() {
 }
 
 watch(enabled, async (val) => {
+  // The BÔNG browser preview uses explicit mic clicks in BongTextChat.
+  // Do not start the upstream AIRI VAD/transcription in parallel.
+  if (isBongTextPreview)
+    return
   if (val) {
     await startAudioInteraction()
   }
@@ -184,6 +188,8 @@ onUnmounted(() => {
 })
 
 watch([stream, () => vadLoaded.value], async ([s, loaded]) => {
+  if (isBongTextPreview)
+    return
   if (enabled.value && loaded && s) {
     try {
       await startVAD(s)
